@@ -1,9 +1,12 @@
 __author__ = 'tony petrov'
 
-import twython
 import datetime
-import constants
+
+import twython
 from twython import TwythonStreamer
+
+from smores import constants
+
 
 class Handler:
     def fetch_data(self):
@@ -61,14 +64,14 @@ class TwitterHandler(Handler):
         return any(d+datetime.timedelta(minutes=15)<datetime.datetime.now() for d in self._wait_for)
 
     #get the ids of all members of lists that the crawler has
-    def get_list_members(self):
+    def get_list_members(self,lists):
         list_members=[]
         try:
-            if len(self._user_lists)<=0:
-                self._user_lists=self._twitter.show_lists()
-                self._user_lists=[ul['list_id'] for ul in self._user_lists]
-            for l in self._user_lists:
-                list_members+=self._twitter.get_list_members(list_id=l)
+            if lists:
+                #lists=self._twitter.show_lists()
+                #self._user_lists=[ul['list_id'] for ul in self._user_lists]
+                for l in self._user_lists:
+                    list_members+=self._twitter.get_list_members(list_id=l)
         except:
             print "An Error Occurred"
         return list_members
@@ -132,7 +135,7 @@ class TwitterHandler(Handler):
         try:
             if(candidates):
                 #if there are some users remaining see if we have space to follow their timeline without following them
-                if len(self._users)<constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS:
+                if len(self._users)< constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS:
                     take=min(constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS-len(self._users),len(candidates))
                     self._users+=[{'id':c['id'],'current_tweet':0} for c in candidates[:take]]
                     candidates=candidates[take:]
@@ -165,16 +168,16 @@ class TwitterHandler(Handler):
         return users
 
     #attempts to find new accounts to follow
-    def explore(self):
+    def explore(self,total_followed):
+        candidates=[]
         try:
             #get our suggested categories
             slugs=self._twitter.get_user_suggestions()
             data=self._twitter.verify_credentials()
             #get the people who we are following
             following=self._twitter.get_friends_ids(screen_name=data['screen_name'])
-            candidates=[]
             #get the total number of twitter users that we follow including bulk list users and twitter list users as well as non followed users
-            total_followed=set(following).add(self._users).add(self.get_list_members())
+            #total_followed=set(following).add(self._users).add(self.get_list_members())
             ff_requests=[15,30]#friends_ids and followers_ids requests remaining
             for s in slugs:
                 #get some suggested users in the given category
@@ -185,14 +188,14 @@ class TwitterHandler(Handler):
                 #get the users which we currently do not follow only
                 candidates+=list(set(users)-total_followed)
             #try to fit some of the candidates into the twitter lists
-            candidates=self.fit_to_lists(candidates,self._user_lists,constants.TWITTER_MAX_NUMBER_OF_LISTS,constants.TWITTER_MAX_LIST_SIZE,True)
+            candidates=self.fit_to_lists(candidates,self._user_lists, constants.TWITTER_MAX_NUMBER_OF_LISTS, constants.TWITTER_MAX_LIST_SIZE,True)
             #try to fit some users into the bulk lists
-            candidates=self.fit_to_lists(candidates,self._bulk_lists,constants.TWITTER_MAX_NUM_OF_BULK_LISTS,constants.TWITTER_BULK_LIST_SIZE,False)
+            candidates=self.fit_to_lists(candidates,self._bulk_lists, constants.TWITTER_MAX_NUM_OF_BULK_LISTS,
+                                         constants.TWITTER_BULK_LIST_SIZE,False)
             self.__follow_users__(candidates)
         except:
             print "Request Limit on Twitter reached"
-            return
-        return
+        return candidates
     #fetches the crawler's timeline id specifies the id of the last returned tweet, if since is true
     # crawler returns tweets that were posted after the given id
     def fetch_home_timeline(self,task_data):
@@ -248,6 +251,28 @@ class TwitterHandler(Handler):
             print e
         return data
  #Dim token = "821591210-iYuSCipISYWur43aECxEVFbPXaLIyZz02gy5iJXr"
+
+    def get_trends(self,**kwargs):
+        trends=[]
+        if('woeid' in kwargs):
+            trends=self._twitter.get_place_trends(id=kwargs['woeid'])
+        elif('lat' in kwargs and 'long' in kwargs):
+            trends=self._twitter.get_closest_trends(lat=kwargs['lat'],long=kwargs['long'])
+        else:
+            locations=self._twitter.get_available_trends()
+            if('location' in kwargs):
+                loc=kwargs['location'].lower()
+                locations=filter(lambda x:x['country'].lower()==loc or x['name'].lower()==loc or x['countryCode'].lower()==loc,locations)
+                locations=(x['woeid'] for x in locations)
+                i=0
+                for l in locations:
+                    if(i== constants.MAX_TWITTER_TRENDS_REQUESTS):
+                        break
+                    else:
+                        trends+=self.get_trends(woeid=l)
+                        i+=1
+        return trends
+
 #Dim tokenSecret = "i75mvboXg4GLZ3DxjliPibS2C67fFHro07MNgc5n1I"
 #Dim consumerKey = "LnPgs7nQZCep40xkQAq5QQ"
 #Dim consumerSecret = "i08dNhUJtdNWcFxd7mHYPaw9cVHbQXUw5zlLC3TYJJs"
