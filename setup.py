@@ -7,6 +7,6 @@ setup(name='smores',
       url='https://github.com/2087829p/smores',
       author='Tony Petrov',
       author_email='tonyf71055@gmail.com',
-      license='Apache 2.0',
+      license='MIT',
       packages=['smores'],
       zip_safe=False)
