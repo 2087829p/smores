@@ -50,8 +50,9 @@ class Credentials_Error(Exception):
 
 
 class TwitterHandler(Handler):
-    def __init__(self, acc_details,read_only=True):
-        if (not acc_details or not 'app_key' in acc_details):
+    def __init__(self, acc_details,read_only=True,**kwargs):
+        self.id=kwargs['id']
+        if not acc_details or not 'app_key' in acc_details:
             raise Credentials_Error('Missing account credentials')
         if constants.TESTING:
             self._twitter=test.MockTwitter()
@@ -61,8 +62,14 @@ class TwitterHandler(Handler):
                     self._twitter = twython.Twython(acc_details['app_key'], acc_details['app_secret'],oauth_version=2)
                     acc_details['oauth_token'] = self._twitter.obtain_access_token()
                 else:
-                    self._twitter = twython.Twython(acc_details['app_key'], acc_details['app_secret'],
+                    if 'client_args' in kwargs:
+                        self._twitter = twython.Twython(acc_details['app_key'], acc_details['app_secret'],
+                                            acc_details['oauth_token'], acc_details['oauth_token_secret'],
+                                            client_args=kwargs['client_args'])
+                    else:
+                        self._twitter = twython.Twython(acc_details['app_key'], acc_details['app_secret'],
                                             acc_details['oauth_token'], acc_details['oauth_token_secret'])
+
                 self.acc_details=acc_details
             # self._auth=self._twitter.get_authentication_tokens()
             # self._lists=self._twitter.show_owned_lists()#get lists that the user has
@@ -76,7 +83,7 @@ class TwitterHandler(Handler):
         # self._user_lists=workdata['user_lists'] if 'user_lists' in workdata.keys() else []#get twitter lists containing up to 5000 users each
         # #_bulk_lists-dict[id,count]
         # self._bulk_lists=workdata['bulk_lists'] if 'bulk_lists' in workdata.keys else []#get list of dict containing 100 twitter users each used in the fetch_bulk_tweets function
-        self._list_attempts=15
+        self._list_attempts = 15
         self._wait_for = [0 for i in range(4)]
 
     # def fetch_data(self):
@@ -211,9 +218,9 @@ class TwitterHandler(Handler):
     def explore(self, args):
         candidates = args['remaining'] if 'remaining' in args.keys() else []
         self._list_attempts = 15
-        total_followed = [f['id'] for f in args['total_followed']] if 'total_followed' in args.keys() else []
-        user_lists = args['user_lists'] if 'user_lists' in args.keys() else []
-        bulk_lists = args['bulk_lists'] if 'bulk_lists' in args.keys() else []
+        total_followed = [f['id'] for f in args['total_followed']] if 'total_followed' and args['total_followed'] in args.keys() else []
+        user_lists = args['user_lists'] if 'user_lists' and args['user_lists'] in args.keys() else []
+        bulk_lists = args['bulk_lists'] if 'bulk_lists' and args['bulk_lists'] in args.keys() else []
         users = args['users'] if 'users' in args.keys() else []
         try:
             # get our suggested categories

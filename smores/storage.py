@@ -50,23 +50,24 @@ class Format_Error(Exception):
     def __str__(self):
         return repr(self.value)
 
-
 def read_login(f):
-    data = {}
+    data = []
     file_path = __abs_path__(f)
-    if not os.path.exists('file'):
+    if not os.path.exists(file_path):
         open('file', 'w').close()
         return data
     with open(file_path, 'r') as handle:
         content = handle.readlines()
         for l in content:
+            data_entry={}
             l = l.strip("[]")
             entry = l.split(',')
             for e in entry:
                 d = e.split(":")
                 if (len(d) != 2):
                     raise Format_Error("Unable to parse credentials file due to error in formatting")
-                data[d[0]] = d[1]
+                data_entry[d[0]] = d[1]
+            data.append(data_entry)
     return data
 
 
@@ -91,7 +92,9 @@ class StorageSystem:
     # NEVER TO BE CALLED BY ANYONE BUT SCHEDULER
     def switch_db_context(self):
         self._current_db = time.strftime("%x")
-
+    # TO BE USED ONLY FOR TESTING
+    def set_db_context(self,c):
+        self._current_db = c
     # NOT TO BE CALLED BY USER MUST BE CALLED ONLY BY SCHEDULER
     def switch_collection_context(self):
         self._current_collection = time.strftime("%X")

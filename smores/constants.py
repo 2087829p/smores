@@ -19,6 +19,7 @@ TWITTER_USER_STORAGE='data\\twitter\\users'
 TWITTER_WALL_STORAGE='data\\twitter\\home'
 TWITTER_CANDIDATES_STORAGE='data\\twitter\\remaining'
 TWITTER_CREDENTIALS='data\\twitter\\login'
+PROXY_LOCATION='data\\proxies'
 
 #Service plugins
 TWITTER_PLUGIN_SERVICE=100              #redirect output from all twitter crawler models to the plugin

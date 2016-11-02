@@ -1,6 +1,7 @@
 __author__ = 'tony petrov'
 import scheduler as s
 import constants as c
+import sys
 scheduler=None
 
 def crawl(**kwargs):
@@ -30,9 +31,72 @@ def politeness_test():
     else:
         print 'Tests failed:'
         print sh._twitter._twitter.get_failures()
+    sys.exit(0)
+def printStats(**kwargs):
+    total = 0
+    unique = 0
+    users = 0
+    cycles = 0
+    data = []
+    pipeline = [
+        {'$unwind':'$user'},
+        {'$group':{
+            '_id':'$id',
+            'unique_tweets':{'$addToSet':'$id'},
+            'unique_users':{'$addToSet':'$user.id'},
+            'count':{'$sum':1}
+            }
+        },
+        {'$project':{
+            '_id':0,
+            'total_tweets':'$count',
+            'unique_tweets':{'$size':'unique_tweets'},
+            'users':{'$size':'unique_users'}
+            }
+        }
+    ]
+    try:
+            import pymongo
+            mongo = pymongo.MongoClient(kwargs['ip'], kwargs['port'])
+            db = mongo[kwargs['db']]
+            cols = db.collection_names()
+            for c in cols:
+                data = db[c].aggregate(pipeline)
+                total += db[c].count()
+                unique += db[c].distinct("id").length
+                users += db[c].distinct("user.id").length
+                cycles+=1
+            mongo.close()
+    except:
+            raise ValueError('MongoDB server ' + kwargs['ip'] + ':' + str(kwargs['port'])
+                             + ' endpoint data is incorrect or server is down')
+    print "\n results from "+kwargs['model'] + \
+          "\n total tweets gathered = " + str(total) + \
+          "\n tweets per cycle = " + str(total/cycles) +\
+          "\n total unique tweets = " + str(unique) +\
+          "\n total users crawled = " + str(users) + \
+          "\n users per cycle = " + str(users/cycles)
 
 def model_comparison():
-    pass
+    import storage,time
+    mdb="mdb"+time.strftime("%x")
+    db1 = storage.StorageSystem('localhost',0,10)
+    db1.set_db_context(mdb)
+    strm="strm"+time.strftime("%x")
+    db2 = storage.StorageSystem('localhost',0,4)
+    db2.set_db_context(strm)
+    sh=s.Scheduler(use='both',site='twitter',storage={'model':db1,'stream':db2})
+    sh.start()
+    import time
+    time.sleep(900)
+    sh.terminate()
+    db1.shutdown()
+    db2.shutdown()
+    from concurrent import futures
+    with futures.ThreadPoolExecutor(max_workers=2) as pool:
+        pool.submit(printStats,ip='localhost',port='',db=mdb,model='model')
+        pool.submit(printStats,ip='localhost',port='',db=mdb,model='streaming')
+    sys.exit(0)
 
 politeness_test()
 #crawl(use='model')

@@ -56,7 +56,7 @@ class Minion(threading.Thread):
                     work_set=[]
             except Exception as e:
                 print e.message
-                work_set = self.__request_work__(work_set)
+                work_set = self.__request_work__([])
                 print 'executing ' + str(self._task['op'])
                 fetch=self._task['fetch']
             if self._task['plugins']:
