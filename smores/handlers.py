@@ -49,7 +49,7 @@ class Credentials_Error(Exception):
         return repr(self.value)
 
 
-class TwitterHandler(Handler):
+class TwitterHandler:
     def __init__(self, acc_details,read_only=True,**kwargs):
         self.id=kwargs['id']
         if not acc_details or not 'app_key' in acc_details:
@@ -77,25 +77,9 @@ class TwitterHandler(Handler):
                 print "Unable to login to twitter cause "+ e.message
                 import sys
                 sys.exit()
-        #users-dict[id(specifies the tweeter id of the user),current_tweet(specifies the id of the last tweet fetched by the crawler)]
-        # self._users=workdata['_users'] if '_users' in workdata.keys() else []#get the _users that we don't follow but want tweets from
-        # #user_lists-dict[id,count]
-        # self._user_lists=workdata['user_lists'] if 'user_lists' in workdata.keys() else []#get twitter lists containing up to 5000 users each
-        # #_bulk_lists-dict[id,count]
-        # self._bulk_lists=workdata['bulk_lists'] if 'bulk_lists' in workdata.keys else []#get list of dict containing 100 twitter users each used in the fetch_bulk_tweets function
         self._list_attempts = 15
         self._wait_for = [0 for i in range(4)]
 
-    # def fetch_data(self):
-    #     data=self.fetch_home_timeline({"id":0,"since":False})
-    #     for u in self._users:
-    #         data+=self.fetch_user_timeline(u['id'])
-    #     for l in self._lists:
-    #         data+=self.fetch_list_tweets(l)
-    #     for ul in self._user_lists:
-    #         data+=self.fetch_bulk_tweets(ul['id'])
-    #     return data
-    # checks to see if fetching data at this time is possible based on the twitter timeout
     def can_fetch(self):
         if (len(self._wait_for) == 0):
             return True
@@ -176,21 +160,21 @@ class TwitterHandler(Handler):
         # return the remaining users which we could not add to any list
         return candidates
 
-    def __follow_users__(self, candidates, users):
+    def __follow_users__(self, candidates, users,following):
         try:
+            if candidates and following<constants.MAX_FOLLOWABLE_USERS:
+                # follow all the remaining users which we couldn't find a place for
+                for i in range(min(constants.TWITTER_MAX_FOLLOW_REQUESTS, len(candidates))):
+                    try:
+                        self._twitter.create_friendship(user_id=candidates[i], follow=True)
+                    except:
+                        print "Could not follow user " + str(candidates[i])
             if candidates:
                 # if there are some users remaining see if we have space to follow their timeline without following them
                 if len(users) < constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS:
                     take = min(constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS - len(users), len(candidates))
                     users += [{'id': c, 'current_tweet': 0} for c in candidates[:take]]
                     candidates = candidates[take:]
-            if candidates:
-                # follow all the remaining users which we couldn't find a place for
-                for i in range(min(constants.TWITTER_MAX_NUM_OF_REQUESTS_PER_CYCLE, len(candidates))):
-                    try:
-                        self._twitter.create_friendship(user_id=candidates[i], follow=True)
-                    except:
-                        print "Could not follow user " + str(candidates[i])
         except Exception as e:
             print e.message
         return candidates
@@ -216,6 +200,7 @@ class TwitterHandler(Handler):
 
     # attempts to find new accounts to follow
     def explore(self, args):
+        'Find new users to follow'
         candidates = args['remaining'] if 'remaining' in args.keys() else []
         self._list_attempts = 15
         total_followed = [f['id'] for f in args['total_followed']] if 'total_followed' and args['total_followed'] in args.keys() else []
@@ -228,7 +213,7 @@ class TwitterHandler(Handler):
             data = self._twitter.verify_credentials()
             # get the people who we are following
             following = self._twitter.get_friends_ids(screen_name=data['screen_name'])
-            total_followed += following['ids']
+            total_followed += following['ids'] + [i for sl in bulk_lists for i in sl['id']]
             # get the total number of twitter users that we follow including bulk list users and twitter list users as well as non followed users
             # total_followed=set(following).add(self._users).add(self.get_list_members())
             ff_requests = [14, 15]  #friends_ids and followers_ids requests remaining
@@ -246,15 +231,15 @@ class TwitterHandler(Handler):
             candidates = self.fit_to_lists(candidates, user_lists, constants.TWITTER_MAX_NUMBER_OF_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_MAX_LIST_SIZE, True)
             # try to fit some users into the bulk lists
-            candidates = self.fit_to_lists(candidates, bulk_lists, constants.TWITTER_MAX_NUM_OF_BULK_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
+            candidates = self.fit_to_lists(candidates, bulk_lists, constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_BULK_LIST_SIZE, False)
-            self.__follow_users__(candidates, users)
+            self.__follow_users__(candidates, users,len(following))
         except Exception as e:
             print "Error while exploring " + e.message
             if  candidates:
                 candidates = self.fit_to_lists(candidates, user_lists, constants.TWITTER_MAX_NUMBER_OF_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
                                                constants.TWITTER_MAX_LIST_SIZE, True)
-                candidates = self.fit_to_lists(candidates, bulk_lists, constants.TWITTER_MAX_NUM_OF_BULK_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
+                candidates = self.fit_to_lists(candidates, bulk_lists, constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * constants.TWITTER_CYCLES_PER_HOUR,
                                                constants.TWITTER_BULK_LIST_SIZE, False)
                 self.__follow_users__(candidates, users)
         if constants.TESTING:
@@ -289,16 +274,16 @@ class TwitterHandler(Handler):
 
     # fetches the specified user's timeline
     def fetch_user_timeline(self, user):
-        return self._twitter.get_user_timeline(user_id=user)
+        return self._twitter.get_user_timeline(user_id=user)# user = 900 , app = 1500
 
     # fetches the tweets in the specified list of _users
     def fetch_list_tweets(self, list):
-        return self._twitter.get_list_statuses(list_id=list)
+        return self._twitter.get_list_statuses(list_id=list)# 900
 
     # fetches the latest tweets of up to 100 _users
     # as specified in the user_ids list
     def fetch_bulk_tweets(self, user_ids):
-        return self._twitter.lookup_user(user_id=user_ids)
+        return self._twitter.lookup_user(user_id=user_ids) # user = 900, app = 300
 
 
     def search(self,q_params):

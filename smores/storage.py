@@ -7,7 +7,7 @@ import threading
 import pymongo
 import constants
 from concurrent import futures
-import tests
+import Queue
 
 def __abs_path__(fl):
     curr_dir = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
@@ -100,6 +100,7 @@ class StorageSystem:
         self._current_collection = time.strftime("%X")
 
     def __perform_write__(self, data, ip, port, **kwargs):
+        'Write the new data to the specified server'
         try:
             mongo = pymongo.MongoClient(ip, port)
             db = mongo[kwargs['current_db']]
@@ -110,6 +111,7 @@ class StorageSystem:
                              + ' endpoint data is incorrect or server is down')
 
     def write(self, data):
+        'Enqueue data that the storage system will attempt to save'
         self._pool.submit(self.__perform_write__,
                           data, self.ip,
                           self.port,
@@ -120,61 +122,27 @@ class StorageSystem:
         print "Storage system is shutting down please wait for all pending IO tasks to complete"
         self._pool.shutdown(True)
 
-
-# class Filter:
-#     def __init__(self,name,store,filters):
-#         self._name=name
-#         self._data=[]
-#         self._store=store
-#         self._plugins=filters
-#
-#     def interrupt(self):
-#         for p in self._plugins:
-#             p.interrupt()
-#
-#     def data_available(self,data):
-#         self._data+=data
-#         self._available=True
-#         self.run()
-#
-#     def run(self):
-#         while self._available:
-#             data=self.process(self._data)
-#             if(self._plugins):
-#                 for p in self._plugins:
-#                     p.data_available(data)
-#                 if(self._store):
-#                     self._store(data)
-#                 self._available=False
-#
-#     def register_plugin(self,p):
-#         if isinstance(p,Filter):
-#             self._plugins.append(p)
-#
-#     def process(self,data):
-#         pass
-
 # http://www.bogotobogo.com/python/Multithread/python_multithreading_Synchronization_Condition_Objects_Producer_Consumer.php
 class Filter(threading.Thread):
     # service used to specify which task should results should be fed to filter refer to service plugins in constants.py
     def __init__(self, service, store, filters):
         threading.Thread.__init__(self)
         self._for = service
-        self._data = []
+        self._data = Queue.Queue()
         self._store = store
         self._plugins = filters
         self._cond = threading.Condition()
         self._lock = threading.Lock()
         self.daemon = True
-        #self.start()
         self._running = True
+        #self.start()
 
     def set_store(self, store):
         self._store = store
 
     def data_available(self, data):
-        with self._lock:
-            self._data += data
+        'Notify the plugin that new data is available for processing'
+        self._data.put(data)
         self._cond.notify()
 
     def start(self):
@@ -183,12 +151,14 @@ class Filter(threading.Thread):
             p.start()
 
     def interrupt(self):
+        'Terminate plugin and its pipeline'
         self._running = False
         self._cond.notify()
         for p in self._plugins:
             p.interrupt()
 
     def register_plugin(self, p):
+        'Add new plugin to the end of the pipeline'
         if isinstance(p, Filter):
             self._plugins.append(p)
             if self.is_alive:
@@ -196,14 +166,15 @@ class Filter(threading.Thread):
 
     def run(self):
         while self._running:
+            while self._data:
+                data = self.process(self._data.get())
+                self._data.task_done()
+                if self._store:
+                    self._store(data)
+                for p in self._plugins:
+                    p.data_available(data)
             self._cond.wait()
-            data = []
-            with self._lock:
-                data = self.process(self._data)
-            if (self._store):
-                self._store(data)
-            for p in self._plugins:
-                p.data_available(data)
 
     def process(self, data):
+        'Processes the input data must be overridden and implemented in every class that subclasses this one'
         pass

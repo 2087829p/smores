@@ -1,5 +1,5 @@
 __author__ = 'tony petrov'
-
+from constants import  *
 class MockTwitter:
     def __init__(self):
         self.home_timeline=15
@@ -11,8 +11,8 @@ class MockTwitter:
         self.user_suggestions_by_slug=15
         self.credentials=15
         self.user_timeline=180
-        self.lookup=60
-        self.list_statuses=180
+        self.lookup=TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE
+        self.list_statuses=TWITTER_MAX_NUMBER_OF_LISTS
         self.followers_ids=15
         self.friends_ids=15
         self.followers_list=15
