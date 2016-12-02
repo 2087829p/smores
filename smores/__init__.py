@@ -97,6 +97,13 @@ def model_comparison():
         pool.submit(printStats,ip='localhost',port='',db=mdb,model='model')
         pool.submit(printStats,ip='localhost',port='',db=mdb,model='streaming')
     sys.exit(0)
-
+import numpy as np
+from utils import *
+n=NeuralNetwork(6,1)
+n.add_hidden_layer(10)
+n.train(np.array([1,1,1,1,1,1]),np.array([1]),5)
+n.train(np.array([1,1,1,1,1,1]),np.array([1]))
+n.train(np.array([0,0,0,0,0,0]),np.array([0]),5)
+print n.predict(np.array([0]*6))
 politeness_test()
 #crawl(use='model')
