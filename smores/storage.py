@@ -9,6 +9,7 @@ import constants
 from concurrent import futures
 import Queue
 
+
 def __abs_path__(fl):
     curr_dir = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
     abs_file_path = os.path.join(curr_dir, fl)
@@ -28,7 +29,8 @@ def load_data(f):
             print "error while opening file " + f
     return data
 
-def save_data(data, fl,append = False):
+
+def save_data(data, fl, append=False):
     if constants.TESTING:
         return
     file_path = __abs_path__(fl)
@@ -39,9 +41,10 @@ def save_data(data, fl,append = False):
             print "could not create missing directory"
             return
     if append:
-        data+=load_data(fl)
+        data += load_data(fl)
     with open(file_path, 'wb') as handle:
         pickle.dump(data, handle)
+
 
 class Format_Error(Exception):
     def __init__(self, value):
@@ -49,6 +52,7 @@ class Format_Error(Exception):
 
     def __str__(self):
         return repr(self.value)
+
 
 def read_login(f):
     data = []
@@ -59,7 +63,7 @@ def read_login(f):
     with open(file_path, 'r') as handle:
         content = handle.readlines()
         for l in content:
-            data_entry={}
+            data_entry = {}
             l = l.strip("[]")
             entry = l.split(',')
             for e in entry:
@@ -69,8 +73,6 @@ def read_login(f):
                 data_entry[d[0]] = d[1]
             data.append(data_entry)
     return data
-
-
 
 
 def save_candidates(candidates):
@@ -86,15 +88,18 @@ class StorageSystem:
         self.ip = ip
         self.port = port
         self._current_db = time.strftime("%x")  # sets the name of the current db to the current date
-        self._current_collection = time.strftime("%X")  # set the current collection to the current time aka current hour
+        self._current_collection = time.strftime(
+            "%X")  # set the current collection to the current time aka current hour
         self._pool = futures.ThreadPoolExecutor(max_workers=thread_count)
 
     # NEVER TO BE CALLED BY ANYONE BUT SCHEDULER
     def switch_db_context(self):
         self._current_db = time.strftime("%x")
+
     # TO BE USED ONLY FOR TESTING
-    def set_db_context(self,c):
+    def set_db_context(self, c):
         self._current_db = c
+
     # NOT TO BE CALLED BY USER MUST BE CALLED ONLY BY SCHEDULER
     def switch_collection_context(self):
         self._current_collection = time.strftime("%X")
@@ -122,6 +127,7 @@ class StorageSystem:
         print "Storage system is shutting down please wait for all pending IO tasks to complete"
         self._pool.shutdown(True)
 
+
 # http://www.bogotobogo.com/python/Multithread/python_multithreading_Synchronization_Condition_Objects_Producer_Consumer.php
 class Filter(threading.Thread):
     # service used to specify which task should results should be fed to filter refer to service plugins in constants.py
@@ -135,7 +141,7 @@ class Filter(threading.Thread):
         self._lock = threading.Lock()
         self.daemon = True
         self._running = True
-        #self.start()
+        # self.start()
 
     def set_store(self, store):
         self._store = store
