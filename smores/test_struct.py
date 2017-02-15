@@ -1,3 +1,6 @@
+from twython import TwythonError
+from twython import TwythonRateLimitError
+import random
 __author__ = 'tony petrov'
 # The fake object samples are taken from https://dev.twitter.com/rest/reference
 from constants import *
@@ -1424,6 +1427,7 @@ class MockTwitter:
         self.home_timeline = 15
         self.user_list_size = 100
         self.list_member_fail = False
+        self.backed_off = True
         self.create_list_calls = 15
         self.create_friends = 15
         self.user_suggestions = 15
@@ -1438,23 +1442,43 @@ class MockTwitter:
         self.friends_list = 15
 
     def get_followers_ids(self, **kwargs):
+        if self.followers_ids==0:
+            raise TwythonRateLimitError('501',501)
         self.followers_ids -= 1
+        if self.followers_ids<0:
+            self.backed_off=False
         return fake_fr_ids
 
     def get_friends_ids(self, **kwargs):
+        if self.friends_ids==0:
+            raise TwythonRateLimitError('501',501)
         self.friends_ids -= 1
+        if self.friends_ids<0:
+            self.backed_off=False
         return fake_fr_ids
 
     def get_friends_list(self, **kwargs):
+        if self.friends_list==0:
+            raise TwythonRateLimitError('501',501)
         self.friends_list -= 1
+        if self.friends_list<0:
+            self.backed_off=False
         return fr_list
 
     def get_followers_list(self, **kwargs):
+        if self.followers_list==0:
+            raise TwythonRateLimitError('501',501)
         self.followers_list -= 1
+        if self.followers_list<0:
+            self.backed_off=False
         return fr_list
 
     def get_home_timeline(self, **kwargs):
+        if self.home_timeline==0:
+            raise TwythonRateLimitError('501',501)
         self.home_timeline -= 1
+        if self.home_timeline<0:
+            self.backed_off=False
         return fake_tweets
 
     def create_list_members(self, **kwargs):
@@ -1463,34 +1487,69 @@ class MockTwitter:
         return {'id': 5}
 
     def create_list(self, **kwargs):
+        if self.create_list_calls==0:
+            raise TwythonRateLimitError('501',501)
         self.create_list_calls -= 1
+        if self.create_list_calls<0:
+            self.backed_off=False
         return fake_list
 
     def create_friendship(self, **kwargs):
+        if self.create_friends==0:
+            raise TwythonRateLimitError('501',501)
+        if self.create_friends<0:
+            self.backed_off=False
         self.create_friends -= 1
 
     def get_user_suggestions(self, **kwargs):
+        if self.user_suggestions==0:
+            raise TwythonRateLimitError('501',501)
         self.user_suggestions -= 1
+        if self.user_suggestions<0:
+            self.backed_off=False
         return fake_slugs
 
     def verify_credentials(self, **kwargs):
+        if self.credentials==0:
+            raise TwythonRateLimitError('501',501)
         self.credentials -= 1
+        if self.credentials<0:
+            self.backed_off=False
         return fake_creds
 
     def get_user_suggestions_by_slug(self, **kwargs):
+        if self.user_suggestions_by_slug==0:
+            raise TwythonRateLimitError('501',501)
         self.user_suggestions_by_slug -= 1
+        if self.user_suggestions_by_slug<0:
+            self.backed_off=False
+        throw = random.uniform(0.0,1.0)<0.3
+        if throw:
+            raise TwythonError('not found',404)
         return fake_user_suggestions
 
     def get_user_timeline(self, **kwargs):
+        if self.user_timeline==0:
+            raise TwythonRateLimitError('501',501)
         self.user_timeline -= 1
+        if self.user_timeline<0:
+            self.backed_off=False
         return fake_tweets
 
     def get_list_statuses(self, **kwargs):
+        if self.list_statuses==0:
+            raise TwythonRateLimitError('501',501)
         self.list_statuses -= 1
+        if self.list_statuses<0:
+            self.backed_off=False
         return fake_tweets
 
     def lookup_user(self, **kwargs):
+        if self.lookup==0:
+            raise TwythonRateLimitError('501',501)
         self.lookup -= 1
+        if self.lookup<0:
+            self.backed_off=False
         return fake_tweets
 
     def passed(self):

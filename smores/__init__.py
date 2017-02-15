@@ -31,7 +31,6 @@ def politeness_test():
     sh = s.Scheduler(use='model', site='twitter',multicore=True)
     sh.start()
     import time
-
     time.sleep(600)
     sh.terminate()
     if sh._handlers[0]._twitter.passed():

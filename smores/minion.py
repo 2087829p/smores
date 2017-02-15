@@ -52,7 +52,7 @@ class Minion(threading.Thread):
                     data = fetch(work_set.pop())
                     print self.name + ' executing ' + str(self._task['op']) + ' ' + str(len(work_set)) + ' items left'
                 else:
-                    print self.name + 'executing ' + str(self._task['op'])
+                    print self.name + ' executing ' + str(self._task['op'])
                     data = fetch(work_set)
                     work_set = []
             except Exception as e:
@@ -60,7 +60,7 @@ class Minion(threading.Thread):
                 work_set = self.__request_work__([])
                 print 'executing ' + str(self._task['op'])
                 fetch = self._task['fetch']
-            if self._task['plugins']:
+            if self._task['plugins'] and self._task['op']!=TASK_EXPLORE:
                 for p in self._task['plugins']:
                     p.data_available(data)
             time.sleep(POLITENESS_VALUE)
