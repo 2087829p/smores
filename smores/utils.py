@@ -3,6 +3,7 @@ import threading
 import numpy as np
 from constants import *
 import math
+import time
 
 
 def split_into(l, n):
@@ -14,6 +15,7 @@ def split_into(l, n):
 def fit_in_range(min, max, x):
     return (x - min) / (max - min)
 
+get_tweet_timestamp = lambda t:time.mktime(time.strptime(t["created_at"], "%a %b %d %H:%M:%S +0000 %Y"))
 
 class KMeanClassifier:
     def __init__(self):
@@ -102,7 +104,7 @@ class CrawlTimer(threading.Thread):
     def __init__(self, wait_for, function, **kwargs):
         threading.Thread.__init__(self)
         self.event = threading.Event()
-        self.fs = [(function, kwargs)]
+        self.fs = [(function, kwargs)] if function else []
         self.timeout = wait_for
 
     def add_function(self, f, **kwargs):

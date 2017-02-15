@@ -40,14 +40,14 @@ FACEBOOK_MAX_REQUESTS_PER_HOUR = 200
 
 
 # storage locations
-TWITTER_BULK_LIST_STORAGE = 'data\\twitter\\bulk_lists'
-TWITTER_LIST_STORAGE = 'data\\twitter\\lists'
-TWITTER_USER_STORAGE = 'data\\twitter\\users'
-TWITTER_WALL_STORAGE = 'data\\twitter\\home'
-TWITTER_CANDIDATES_STORAGE = 'data\\twitter\\remaining'
-TWITTER_CREDENTIALS = 'data\\twitter\\login'
-PROXY_LOCATION = 'data\\proxies'
-RANKING_FILTER_CLASSIFIER = 'data\\classifier'
+TWITTER_BULK_LIST_STORAGE = 'data/twitter/bulk_lists'
+TWITTER_LIST_STORAGE = 'data/twitter/lists'
+TWITTER_USER_STORAGE = 'data/twitter/users'
+TWITTER_WALL_STORAGE = 'data/twitter/home'
+TWITTER_CANDIDATES_STORAGE = 'data/twitter/remaining'
+TWITTER_CREDENTIALS = 'data/twitter/login'
+PROXY_LOCATION = 'data/proxies'
+RANKING_FILTER_CLASSIFIER = 'data/classifier'
 
 # other control constants
 RANK_RESET_TIME = 600  # every 10 mins
@@ -56,6 +56,7 @@ RANK_RESET_TIME = 600  # every 10 mins
 TWITTER_STREAMING_BUCKET_MODEL = 'stream'
 TWITTER_CYCLE_HARVESTER = 'harvester'
 TWITTER_HYBRID_MODEL = 'hybrid'
+TWITTER_STREAMING_HARVESTER_NON_HYBRID = 'both'
 
 
 # Service plugins
@@ -65,3 +66,10 @@ TWITTER_HARVESTER_PLUGIN_SERVICE = 101  # redirect output from the twitter model
 TWITTER_STREAMING_PLUGIN_SERVICE = 102  # redirect output from the twitter stream api to the plugin
 TUMBLR_PLUGIN_SERVICE = 103  # redirect tumblr output to plugin
 FACEBOOK_PLUGIN_SERVICE = 104  # redirect facebook output to plugin
+
+
+# Ranking Classifiers
+
+PERCEPTRON_CLASSIFIER = 201
+DEEP_NEURAL_NETWORK_CLASSIFIER = 202
+K_MEANS_CLASSIFIER = 203

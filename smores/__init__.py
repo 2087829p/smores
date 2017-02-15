@@ -2,6 +2,7 @@ __author__ = 'tony petrov'
 import scheduler as s
 import constants as c
 import sys
+from storage import Filter
 
 scheduler = None
 
@@ -27,17 +28,17 @@ def stop():
 
 def politeness_test():
     c.TESTING = True
-    sh = s.Scheduler(use='model', site='twitter')
+    sh = s.Scheduler(use='model', site='twitter',multicore=True)
     sh.start()
     import time
 
-    time.sleep(60)
+    time.sleep(600)
     sh.terminate()
-    if sh._handlers._twitter.passed():
+    if sh._handlers[0]._twitter.passed():
         print 'Politeness tests are passed'
     else:
         print 'Tests failed:'
-        print sh._handlers._twitter.get_failures()
+        print sh._handlers[0]._twitter.get_failures()
     sys.exit(0)
 
 
@@ -88,39 +89,57 @@ def printStats(**kwargs):
           "\n users per cycle = " + str(users / cycles)
 
 
-def model_comparison():
-    import storage, time
+class StatsFilter(Filter):
+    def __init__(self, service, store, filters):
+        super(StatsFilter, self).__init__(service, store, filters)
+        self.unique_users = set()
+        #self.total_users = 0
+        self.total_tweets = 0
+        self.unique_tweets=set()
 
-    mdb = "mdb" + time.strftime("%x")
-    db1 = storage.StorageSystem('localhost', 0, 10)
-    db1.set_db_context(mdb)
-    strm = "strm" + time.strftime("%x")
-    db2 = storage.StorageSystem('localhost', 0, 4)
-    db2.set_db_context(strm)
-    sh = s.Scheduler(use='both', site='twitter', storage={'model': db1, 'stream': db2})
+    def process(self,data):
+        for t in data:
+            self.unique_users.add(t['user']['id'])
+            self.unique_tweets.add(t['id'])
+            self.total_tweets += 1
+
+
+def model_comparison():
+    #import storage, time
+
+    # mdb = "mdb" + time.strftime("%x")
+    # db1 = storage.StorageSystem('localhost', 0, 10)
+    # db1.set_db_context(mdb)
+    # strm = "strm" + time.strftime("%x")
+    # db2 = storage.StorageSystem('localhost', 0, 4)
+    # db2.set_db_context(strm)
+    f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE,lambda x:x,None)
+    f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE,lambda x:x,None)
+    #c.TESTING=True
+    sh = s.Scheduler(use='model', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=False)
     sh.start()
     import time
 
-    time.sleep(900)
+    time.sleep(3600)
     sh.terminate()
-    db1.shutdown()
-    db2.shutdown()
-    from concurrent import futures
+    #db1.shutdown()
+    #db2.shutdown()
+    #from concurrent import futures
+    print "Harvester data\n"
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\n" %(f2.total_tweets,len(f2.unique_tweets),len(f2.unique_users))
+    print "Streaming model data"
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\n" %(f1.total_tweets,len(f1.unique_tweets),len(f1.unique_users))
 
-    with futures.ThreadPoolExecutor(max_workers=2) as pool:
-        pool.submit(printStats, ip='localhost', port='', db=mdb, model='model')
-        pool.submit(printStats, ip='localhost', port='', db=mdb, model='streaming')
+    #with futures.ThreadPoolExecutor(max_workers=2) as pool:
+    #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='model')
+    #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='streaming')
     sys.exit(0)
 
 
 import numpy as np
 from utils import *
 
-n = NeuralNetwork(6, 1)
-n.add_hidden_layer(10)
-n.train(np.array([1, 1, 1, 1, 1, 1]), np.array([1]), 5)
-n.train(np.array([1, 1, 1, 1, 1, 1]), np.array([1]))
-n.train(np.array([0, 0, 0, 0, 0, 0]), np.array([0]), 5)
-print n.predict(np.array([0] * 6))
-politeness_test()
+
+#politeness_test()
+model_comparison()
 # crawl(use='model')

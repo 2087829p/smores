@@ -44,7 +44,17 @@ def save_data(data, fl, append=False):
         data += load_data(fl)
     with open(file_path, 'wb') as handle:
         pickle.dump(data, handle)
-
+def load_explorer_data():
+    import constants as c
+    bulk_lists=load_data(c.TWITTER_BULK_LIST_STORAGE)
+    lists = load_data(c.TWITTER_LIST_STORAGE)
+    users = load_data(c.TWITTER_USER_STORAGE)
+    remaining = load_data(c.TWITTER_CANDIDATES_STORAGE)
+    data={'remaining':remaining if remaining else[],
+          'bulk_lists': bulk_lists if bulk_lists else [],
+          'total_followed': users if users else [],
+          'user_lists': lists if lists else []}
+    return data
 
 class Format_Error(Exception):
     def __init__(self, value):
@@ -58,12 +68,13 @@ def read_login(f):
     data = []
     file_path = __abs_path__(f)
     if not os.path.exists(file_path):
-        open('file', 'w').close()
+        open(file_path, 'w').close()
         return data
     with open(file_path, 'r') as handle:
         content = handle.readlines()
         for l in content:
             data_entry = {}
+            l = l.strip('\n')
             l = l.strip("[]")
             entry = l.split(',')
             for e in entry:
@@ -149,10 +160,13 @@ class Filter(threading.Thread):
     def data_available(self, data):
         'Notify the plugin that new data is available for processing'
         self._data.put(data)
-        self._cond.notify()
+        with self._lock:
+            self._cond.notify()
 
     def start(self):
         threading.Thread.start(self)
+        if not self._plugins:
+            return
         for p in self._plugins:
             p.start()
 
@@ -177,8 +191,9 @@ class Filter(threading.Thread):
                 self._data.task_done()
                 if self._store:
                     self._store(data)
-                for p in self._plugins:
-                    p.data_available(data)
+                if self._plugins:
+                    for p in self._plugins:
+                        p.data_available(data)
             self._cond.wait()
 
     def process(self, data):

@@ -23,7 +23,7 @@ class Minion(threading.Thread):
 
     def __request_work__(self, work_set):
         # self._task['site'] = 'sleep'
-        self._task['timeout'] = time.time() + (RUNNING_CYCLE if self._task['op'] == 'twitter'
+        self._task['timeout'] = time.time() + (RUNNING_CYCLE if self._task['site'] == 'twitter'
                                                else DEFAULT_SOCIAL_MEDIA_CYCLE)  #datetime.datetime.now() + datetime.timedelta(minutes = TWITTER_CYCLE_DURATION)
         while (not work_set):
             #with self._lock:
@@ -46,16 +46,17 @@ class Minion(threading.Thread):
         while self._is_running:
             if not work_set:
                 work_set = self.__request_work__(work_set)
-                print 'executing ' + str(self._task['op'])
                 fetch = self._task['fetch']
             try:
                 if isinstance(work_set, list):
                     data = fetch(work_set.pop())
+                    print self.name + ' executing ' + str(self._task['op']) + ' ' + str(len(work_set)) + ' items left'
                 else:
+                    print self.name + 'executing ' + str(self._task['op'])
                     data = fetch(work_set)
                     work_set = []
             except Exception as e:
-                print e.message
+                print "Thread" + str(self.name) +" encountered error " + e.message+" task num = " + str(self._task['op'])
                 work_set = self.__request_work__([])
                 print 'executing ' + str(self._task['op'])
                 fetch = self._task['fetch']
@@ -70,16 +71,16 @@ class Minion(threading.Thread):
 class Streamion(Minion):
     def __init__(self, stream_creds, task, lock, scheduler):
         super(Streamion, self).__init__(task, lock, scheduler)
-        self._creds = stream_creds
+        self._creds = stream_creds if not isinstance(stream_creds,list) else stream_creds[0]
 
     def interrupt(self):
         super(Streamion, self).interrupt()
         self._streamer.disconnect()
 
     def run(self):
-        self._streamer = TwitterStreamer(self._creds['api_key'], self._creds['api_secret']
-                                         , self._creds['oath_token'], self._creds['token_secret'])
-        self._twitter = TwitterHandler(self._creds)
+        self._streamer = TwitterStreamer(self._creds['app_key'], self._creds['app_secret']
+                                         , self._creds['oauth_token'], self._creds['oauth_token_secret'])
+        self._twitter = TwitterHandler(self._creds,id=self._creds['id'])
         self._streamer.set_callback(self._task['store'])
         # if an error occurs e.g. no internet or twitter is inaccessible terminate thread
         # HAS NEVER BEEN TESTED WORKS IN THEORY BUT MIGHT BE BUGGY

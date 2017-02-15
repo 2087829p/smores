@@ -6,10 +6,10 @@ __author__ = 'tony petrov'
 import datetime
 
 import twython
-from twython import TwythonStreamer
+from twython import TwythonStreamer,TwythonError
 import random
 import string
-from smores import constants
+import constants
 import storage as st
 import test_struct as test
 import pytumblr
@@ -53,7 +53,7 @@ class Rate_Limit_Error(Exception):
 
 
 class TwitterHandler:
-    def __init__(self, acc_details, read_only=True, **kwargs):
+    def __init__(self, acc_details, read_only=False, **kwargs):
         self.id = kwargs['id']
         if not acc_details or not 'app_key' in acc_details:
             raise Credentials_Error('Missing account credentials')
@@ -70,8 +70,8 @@ class TwitterHandler:
                                                         acc_details['oauth_token'], acc_details['oauth_token_secret'],
                                                         client_args=kwargs['client_args'])
                     else:
-                        self._twitter = twython.Twython(acc_details['app_key'], acc_details['app_secret'],
-                                                        acc_details['oauth_token'], acc_details['oauth_token_secret'])
+                        self._twitter = twython.Twython("KXou5WEHTTTzwW29Gd5xjF8hp", "VRFioMY3xadxPOXVM898q9eUzaBhN6HlRTEaKeV6RzF8OAIgVz",
+                                                       "782911039369310208-6kImFNvTIfFS4WJplsKmttuq6TDdvWz", "HYOoAlcB1CeSIAqojLGMvH7pAwadAGnPumnmMUtIb0u4t")
 
                 self.acc_details = acc_details
             # self._auth=self._handlers.get_authentication_tokens()
@@ -79,7 +79,6 @@ class TwitterHandler:
             except Exception as e:
                 print "Unable to login to twitter cause " + e.message
                 import sys
-
                 sys.exit()
         self._scheduler = kwargs.get('scheduler', None)
         self._list_attempts = 15
@@ -175,9 +174,12 @@ class TwitterHandler:
         try:
             if candidates and following < constants.MAX_FOLLOWABLE_USERS:
                 # follow all the remaining users which we couldn't find a place for
+                import time
+                import random
                 for i in range(min(constants.TWITTER_MAX_FOLLOW_REQUESTS, len(candidates))):
                     try:
                         self._twitter.create_friendship(user_id=candidates[i], follow=True)
+                        time.sleep(random.randint(10,30))  #sleep for random amount of seconds to avoid twitter thinking that we're automated
                     except:
                         print "Could not follow user " + str(candidates[i])
             if candidates:
@@ -207,8 +209,13 @@ class TwitterHandler:
                 users += [x["id"] for x in self._twitter.get_friends_list(user_id=id)["users"]]
                 users += [x["id"] for x in self._twitter.get_followers_list(user_id=id)["users"]]
                 rqs_remaining[1] -= 1
-        except Exception as e:
-            print "an error occurred while getting friends and followers " + e.message
+        except TwythonError as e:
+            if e.error_code==404:
+                print "User " + str(id) + "could not be found"
+            else:
+                print e.message
+        except Exception as e1:
+            print "An error occurred while getting friends and followers " + e1.message
             rqs_remaining[0] = 0
             rqs_remaining[1] = 0
         return users
@@ -225,7 +232,9 @@ class TwitterHandler:
         users = args['users'] if 'users' in args.keys() else []
         try:
             # get our suggested categories
+            print "collecting slugs"
             slugs = self._twitter.get_user_suggestions()
+            print 'slugs='+str(slugs)
             data = self._twitter.verify_credentials()
             # get the people who we are following
             following = self._twitter.get_friends_ids(screen_name=data['screen_name'])
@@ -235,7 +244,15 @@ class TwitterHandler:
             ff_requests = [14, 15]  #friends_ids and followers_ids requests remaining
             for s in slugs[:15]:
                 # get some suggested users in the given category
-                new_users = self._twitter.get_user_suggestions_by_slug(slug=s['name'])['users']
+                new_users=list()
+                try:
+                    new_users = self._twitter.get_user_suggestions_by_slug(slug=s['name'])['users']
+                except TwythonError as e:
+                    if e.error_code==404:
+                        print "Slug " + s['name'] + " could not be found"
+                    else:
+                        print "Could not retrieve data for slug = " + str(s['name']) + " due to " + e.message
+                    continue
                 new_users = [u['id'] for u in new_users]
                 friends = []
                 if ff_requests[0] > 0 or ff_requests[1] > 0:
@@ -244,14 +261,20 @@ class TwitterHandler:
                 # get the users which we currently do not follow only
                 candidates += list(set(new_users + friends + users) - set(total_followed))
             # try to fit some of the candidates into the twitter lists
+            candidates_total = len(candidates)
+            print str(candidates_total)+" new users found"
             candidates = self.fit_to_lists(candidates, user_lists,
                                            constants.TWITTER_MAX_NUMBER_OF_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_MAX_LIST_SIZE, True)
+            print str(candidates_total-len(candidates))+" users added to twitter lists"
+            candidates_total=len(candidates)
             # try to fit some users into the bulk lists
             candidates = self.fit_to_lists(candidates, bulk_lists,
                                            constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_BULK_LIST_SIZE, False)
+            print str(candidates_total-len(candidates))+" users added to bulk lists"
             self.__follow_users__(candidates, users, len(following))
+            print str(len(candidates))+" users left unallocated"
         except Exception as e:
             print "Error while exploring " + e.message
             if candidates:
@@ -281,7 +304,7 @@ class TwitterHandler:
                 temp_data += self._twitter.get_home_timeline()
                 current_id = temp_data[-1]["id"]
                 task_data["id"] = temp_data[0]["id"]
-            elif task_data["since"]:
+            elif 'since' in task_data:
                 temp_data += self._twitter.get_home_timeline(since_id=current_id)
                 current_id = temp_data[0]["id"]
                 task_data["id"] = current_id
@@ -290,6 +313,8 @@ class TwitterHandler:
                 current_id = temp_data[-1]["id"]
             data += temp_data
             max_attempts -= 1
+        task_data['since'] = True
+        #st.save_data(task_data,constants.TWITTER_WALL_STORAGE)
         return data
 
     # fetches the specified user's timeline
