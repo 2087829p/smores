@@ -112,22 +112,20 @@ class TwitterHandler:
             return candidates
         if len(candidates) == 0:
             return []
-        # check if we have any lists
-        if len(lists) > 0:
-            # check if the last list has enough space to fit any of the candidates
-            if lists[-1]['count'] < max_list_size:
+        # check if we have any lists and if the last list has enough space to fit any of the candidates
+        if len(lists) > 0 and lists[-1]['count'] < max_list_size:
                 # determine the max amount of users the list can take
                 take = min(max_list_size - lists[-1]['count'], len(candidates))
                 # determine whether the candidates should go to the twitter lists or bulk lists
                 if is_twitter_list:
                     if self._list_attempts <= 0:
-                        lists[-1]['count'] = self._twitter.get_specific_list(list_id=lists[-1]['id'])['members_count']
+                        lists[-1]['count'] = self._twitter.get_specific_list(list_id=lists[-1]['id'])['member_count']
                         return candidates
                     try:
                         take = min(constants.TWITTER_ADD_TO_LIST_LIMIT, take)
                         # use the api to add the new users to the list
                         self._twitter.create_list_members(list_id=lists[-1]['id'], user_id=candidates[:take])
-                        if take+1<len(candidates):
+                        if take + 1 < len(candidates):
                             self._twitter.add_list_member(list_id=lists[-1]['id'], user_id=candidates[take+1])
                             take += 1
                         self._list_attempts -= 1
@@ -149,12 +147,12 @@ class TwitterHandler:
                 # recurse and attempt to fit in more users
                 return self.fit_to_lists(candidates, lists, max_list_num, max_list_size, is_twitter_list)
         # either no free list was found or no lists exist
-            else:
+        else:
                 if is_twitter_list:
                     try:
                 # create a new twitter list
                         list_id = self._twitter.create_list(name=''.join(random.choice(string.lowercase) for i in range(12)),
-                                                    mode='private')['id']
+                                                    mode='public')['id']
                 # add it to the crawler data base
                         lists.append({'id': list_id, 'count': 0})
                         if self._scheduler:
@@ -250,13 +248,13 @@ class TwitterHandler:
             # get the total number of twitter users that we follow including bulk list users and twitter list users as well as non followed users
             # total_followed=set(following).add(self._users).add(self.get_list_members())
             ff_requests = [14, 15]  #friends_ids and followers_ids requests remaining
-            for s in slugs[:15]:
+            for s in [random.choice(slugs) for i in xrange(15)]:
                 # get some suggested users in the given category
                 new_users=list()
                 try:
                     new_users = self._twitter.get_user_suggestions_by_slug(slug=s['slug'])['users']
                 except TwythonError as e:
-                    if e.error_code==404:
+                    if e.error_code == 404:
                         print "Slug " + s['name'] + " could not be found"
                     else:
                         print "Could not retrieve data for slug = " + str(s['name']) + " due to " + e.message

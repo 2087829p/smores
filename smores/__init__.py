@@ -112,7 +112,7 @@ class StatsFilter(Filter):
 
 def explore_only():
     c.EXPLORING = True
-    c.TESTING = True
+    #c.TESTING = True
     sh = s.Scheduler(use='model', site='twitter', storage=lambda x:x,multicore=False)
     sh.start()
     import time
