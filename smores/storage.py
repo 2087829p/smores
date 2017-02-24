@@ -43,7 +43,10 @@ def save_data(data, fl, append=False):
     if append:
         data += load_data(fl)
     with open(file_path, 'wb') as handle:
-        pickle.dump(data, handle)
+        try:
+            pickle.dump(data, handle)
+        except Exception as e:
+            print "could not save data to file %s cause: %s" % (fl,e.message)
 def load_explorer_data():
     import constants as c
     bulk_lists=load_data(c.TWITTER_BULK_LIST_STORAGE)

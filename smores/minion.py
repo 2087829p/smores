@@ -25,12 +25,14 @@ class Minion(threading.Thread):
     def __request_work__(self, work_set):
         # self._task['site'] = 'sleep'
         self._task['timeout'] = time.time() + (RUNNING_CYCLE if self._task['site'] == 'twitter'
-                                               else DEFAULT_SOCIAL_MEDIA_CYCLE)  #datetime.datetime.now() + datetime.timedelta(minutes = TWITTER_CYCLE_DURATION)
+                                               else DEFAULT_SOCIAL_MEDIA_CYCLE)  # datetime.datetime.now() + datetime.timedelta(minutes = TWITTER_CYCLE_DURATION)
         while (not work_set):
-            #with self._lock:
+            # with self._lock:
             self._task = self._scheduler.request_work(self._task)
             if self._task['site'] == 'sleep':
-                print "%s sleeping for %f seconds" % (self.name,self._task['time'])
+                wakeup = self._task['time'] + time.time()
+                print "%s sleeping for %f seconds waking up at %s" % (
+                self.name, self._task['time'], datetime.datetime.fromtimestamp(wakeup).strftime('%Y-%m-%d %H:%M:%S'))
                 with self._cond:
                     self._cond.wait(self._task['time'])
             else:
@@ -39,13 +41,11 @@ class Minion(threading.Thread):
                 break
         return work_set
 
-
-
     def run(self):
         work_set = copy.deepcopy(self._task['data'])
         fetch = self._task['fetch']
         data = []
-        #print 'executing ' + str(self._task['op'])
+        # print 'executing ' + str(self._task['op'])
         while self._is_running:
             if not work_set:
                 work_set = self.__request_work__(work_set)
@@ -59,11 +59,12 @@ class Minion(threading.Thread):
                     data = fetch(work_set)
                     work_set = []
             except Exception as e:
-                print "Thread" + str(self.name) +" encountered error " + e.message+" task num = " + str(self._task['op'])
+                print "Thread" + str(self.name) + " encountered error " + e.message + " task num = " + str(
+                    self._task['op'])
                 work_set = self.__request_work__([])
                 print 'executing ' + str(self._task['op'])
                 fetch = self._task['fetch']
-            if self._task['plugins'] and self._task['op']!=TASK_EXPLORE:
+            if self._task['plugins'] and self._task['op'] != TASK_EXPLORE:
                 for p in self._task['plugins']:
                     p.data_available(data)
             time.sleep(POLITENESS_VALUE)
@@ -74,7 +75,7 @@ class Minion(threading.Thread):
 class Streamion(Minion):
     def __init__(self, stream_creds, task, lock, scheduler):
         super(Streamion, self).__init__(task, lock, scheduler)
-        self._creds = stream_creds if not isinstance(stream_creds,list) else stream_creds[0]
+        self._creds = stream_creds if not isinstance(stream_creds, list) else stream_creds[0]
 
     def interrupt(self):
         super(Streamion, self).interrupt()
@@ -84,7 +85,7 @@ class Streamion(Minion):
         print "Starting streamer"
         self._streamer = TwitterStreamer(self._creds['app_key'], self._creds['app_secret']
                                          , self._creds['oauth_token'], self._creds['oauth_token_secret'])
-        self._twitter = TwitterHandler(self._creds,id=self._creds['id'])
+        self._twitter = TwitterHandler(self._creds, id=self._creds['id'])
         self._streamer.set_callback(self._task['store'])
         # if an error occurs e.g. no internet or twitter is inaccessible terminate thread
         # HAS NEVER BEEN TESTED WORKS IN THEORY BUT MIGHT BE BUGGY

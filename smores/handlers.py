@@ -186,12 +186,14 @@ class TwitterHandler:
                 # follow all the remaining users which we couldn't find a place for
                 import time
                 import random
-                for i in range(min(constants.TWITTER_MAX_FOLLOW_REQUESTS, len(candidates))):
+                take = min(constants.TWITTER_MAX_FOLLOW_REQUESTS, len(candidates))
+                for i in xrange(take):
                     try:
                         self._twitter.create_friendship(user_id=candidates[i], follow=True)
                         time.sleep(random.randint(1,15))  #sleep for random amount of seconds to avoid twitter thinking that we're automated
                     except:
                         print "Could not follow user " + str(candidates[i])
+                candidates = candidates[take:]
             if candidates:
                 # if there are some users remaining see if we have space to follow their timeline without following them
                 #if len(users) < constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS:
