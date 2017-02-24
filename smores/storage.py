@@ -25,8 +25,8 @@ def load_data(f):
     with open(file_path, 'rb') as handle:
         try:
             data = pickle.load(handle)
-        except:
-            print "error while opening file " + f
+        except Exception as e:
+            print "error while opening file " + f + ' cause: ' + e.message
     return data
 
 
@@ -87,7 +87,7 @@ def read_login(f):
 
 
 def save_candidates(candidates):
-    save_data(constants.TWITTER_CANDIDATES_STORAGE, candidates)
+    save_data(candidates,constants.TWITTER_CANDIDATES_STORAGE)
 
 
 # 1 db per day
@@ -161,7 +161,8 @@ class Filter(threading.Thread):
         'Notify the plugin that new data is available for processing'
         self._data.put(data)
         with self._lock:
-            self._cond.notify()
+            with self._cond:
+                self._cond.notify()
 
     def start(self):
         threading.Thread.start(self)
@@ -172,10 +173,13 @@ class Filter(threading.Thread):
 
     def interrupt(self):
         'Terminate plugin and its pipeline'
-        self._running = False
-        self._cond.notify()
-        for p in self._plugins:
-            p.interrupt()
+        with self._lock:
+            self._running = False
+            with self._cond:
+                self._cond.notify()
+        if self._plugins:
+            for p in self._plugins:
+                p.interrupt()
 
     def register_plugin(self, p):
         'Add new plugin to the end of the pipeline'

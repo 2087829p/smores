@@ -31,7 +31,13 @@ def politeness_test():
     sh = s.Scheduler(use='model', site='twitter',multicore=True)
     sh.start()
     import time
-    time.sleep(600)
+    t = 600
+    try:
+        while t>0:
+            time.sleep(1)
+            t-=1
+    except KeyboardInterrupt:
+        pass
     sh.terminate()
     if sh._handlers[0]._twitter.passed():
         print 'Politeness tests are passed'
@@ -97,12 +103,27 @@ class StatsFilter(Filter):
         self.unique_tweets=set()
 
     def process(self,data):
+        print "processing data"
         for t in data:
             self.unique_users.add(t['user']['id'])
             self.unique_tweets.add(t['id'])
             self.total_tweets += 1
+        print "data processed"
 
-
+def explore_only():
+    c.EXPLORING = True
+    c.TESTING = True
+    sh = s.Scheduler(use='model', site='twitter', storage=lambda x:x,multicore=False)
+    sh.start()
+    import time
+    t = 3600
+    try:
+        while t>0:
+            time.sleep(1)
+            t-=1
+    except KeyboardInterrupt:
+        pass
+    sh.terminate()
 def model_comparison():
     #import storage, time
 
@@ -115,16 +136,21 @@ def model_comparison():
     f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE,lambda x:x,None)
     f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE,lambda x:x,None)
     #c.TESTING=True
-    sh = s.Scheduler(use='model', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=False)
+    sh = s.Scheduler(use='model', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=True)
     sh.start()
     import time
-
-    time.sleep(3600)
+    t = 3600
+    try:
+        while t>0:
+            time.sleep(1)
+            t-=1
+    except KeyboardInterrupt:
+        pass
     sh.terminate()
     #db1.shutdown()
     #db2.shutdown()
     #from concurrent import futures
-    print "Harvester data\n"
+    print "\nHarvester data"
     print "total tweets = %d\nunique tweets = %d\nunique users = %d\n" %(f2.total_tweets,len(f2.unique_tweets),len(f2.unique_users))
     print "Streaming model data"
     print "total tweets = %d\nunique tweets = %d\nunique users = %d\n" %(f1.total_tweets,len(f1.unique_tweets),len(f1.unique_users))
@@ -140,5 +166,6 @@ from utils import *
 
 
 #politeness_test()
-model_comparison()
+#model_comparison()
+explore_only()
 # crawl(use='model')

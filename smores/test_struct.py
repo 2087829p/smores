@@ -1259,7 +1259,7 @@ fake_user_suggestions={
       "listed_count": 888,
       "profile_use_background_image": True,
       "profile_text_color": "333333",
-      "protected": False,
+      "protected": True,
       "lang": "en",
       "followers_count": 149418,
       "geo_enabled": True,

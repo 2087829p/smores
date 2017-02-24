@@ -140,7 +140,7 @@ class Scheduler:
         if c.TESTING:
             self._predefined_store = False
             self._store = lambda x: x
-            #self._thread_num *= 2
+            self._thread_num += cores - (self._thread_num+len(self._plugins))
         else:
             if 'storage' in kwargs.keys():
                 self._storages = kwargs['storage']
@@ -192,6 +192,7 @@ class Scheduler:
         else:
             self.__setup_minions__()
         self._cycles = [0 for i in range(TOTAL_TASKS)]
+        print "Crawling with %d minions" % len(self._minions)
         for mn in self._minions:
             mn.start()
         for p in self._plugins:
@@ -206,8 +207,9 @@ class Scheduler:
         # ref:http://stackoverflow.com/questions/9812344/cancellable-threading-timer-in-python
         for mn in self._minions:
             mn.interrupt()
-        for p in self._plugins:
-            p.interrupt()
+        if self._plugins:
+            for p in self._plugins:
+                p.interrupt()
         if not c.TESTING:
             if not self._predefined_store:
                 self._storage.shutdown()
@@ -265,7 +267,7 @@ class Scheduler:
         service = TWITTER_PLUGIN_SERVICE if self._use == TWITTER_HYBRID_MODEL else TWITTER_HARVESTER_PLUGIN_SERVICE
         twitter_plugins = [p for p in self._plugins if p._for == service]
         remaining_users = st.load_data(TWITTER_CANDIDATES_STORAGE)
-        remaining_users = remaining_users if remaining_users else [0]
+        remaining_users = remaining_users if remaining_users else []
         bulk_lists = st.load_data(TWITTER_BULK_LIST_STORAGE)
         lists = st.load_data(TWITTER_LIST_STORAGE)
         users = st.load_data(TWITTER_USER_STORAGE)
@@ -291,29 +293,30 @@ class Scheduler:
             t = twitters[i]
             tasks.put((0, {'site': 'twitter', 'op': TASK_EXPLORE,
                             'data': {'remaining': remaining_users,
-                                     'bulk_lists': bulk_lists,
-                                     'total_followed': users,
-                                     'user_lists': lists,
+                                     'bulk_lists': flatten(bulk_lists),
+                                     'total_followed': flatten(users),
+                                     'user_lists': flatten(lists),
                             },
                             'fetch': t.explore,
                             'store': st.save_candidates,
                             'plugins': twitter_plugins,
                             'acc_id': t.id}))
-            # tasks.put((0, {'site': 'twitter', 'op': TASK_UPDATE_WALL,
-            #                  'data': timeline, 'fetch': t.fetch_home_timeline,
-            #                  'store': store, 'plugins': twitter_plugins,
-            #                  'acc_id': t.id}))
-            # tasks.put((0, {'site': 'twitter', 'op': TASK_BULK_RETRIEVE,
-            #                  'data': bulk_lists[i] if len(bulk_lists) > i else [],
-            #                  'fetch': t.fetch_bulk_tweets, 'store': store,
-            #                  'plugins': twitter_plugins,
-            #                  'acc_id': t.id}))
-            # tasks.put((0, {'site': 'twitter', 'op': TASK_FETCH_LISTS,
-            #                  'data': lists[i] if len(lists) > i else [], 'fetch': t.fetch_list_tweets,
-            #                  'store': store, 'plugins': twitter_plugins, 'acc_id': t.id}))
-            # tasks.put((0, {'site': 'twitter', 'op': TASK_FETCH_USER,
-            #                  'data': users[i] if len(users) > i else [], 'fetch': t.fetch_user_timeline,
-            #                  'store': store, 'plugins': twitter_plugins, 'acc_id': t.id}))
+            if not c.EXPLORING:
+                tasks.put((0, {'site': 'twitter', 'op': TASK_UPDATE_WALL,
+                              'data': timeline, 'fetch': t.fetch_home_timeline,
+                             'store': store, 'plugins': twitter_plugins,
+                              'acc_id': t.id}))
+                tasks.put((0, {'site': 'twitter', 'op': TASK_BULK_RETRIEVE,
+                             'data': bulk_lists[i] if len(bulk_lists) > i else [],
+                              'fetch': t.fetch_bulk_tweets, 'store': store,
+                              'plugins': twitter_plugins,
+                             'acc_id': t.id}))
+                tasks.put((0, {'site': 'twitter', 'op': TASK_FETCH_LISTS,
+                              'data': lists[i] if len(lists) > i else [], 'fetch': t.fetch_list_tweets,
+                             'store': store, 'plugins': twitter_plugins, 'acc_id': t.id}))
+                tasks.put((0, {'site': 'twitter', 'op': TASK_FETCH_USER,
+                             'data': users[i] if len(users) > i else [], 'fetch': t.fetch_user_timeline,
+                             'store': store, 'plugins': twitter_plugins, 'acc_id': t.id}))
         return tasks
 
     def __prepare_tumblr__(self, tasks, login):
@@ -362,31 +365,6 @@ class Scheduler:
             if s == 'facebook':
                 self.__prepare_facebook__(tasks, filter(lambda x: x if x['site'] == 'facebook' else None, login))
         return tasks
-
-    # def __put_to_queue__(self, q, i):
-    #     """Insert task i into queue q in an equally spaced manner"""
-    #     if q.queue and i['op'] == q.queue[-1]['op']:
-    #         if i['op'] != q.queue[0]['op']:
-    #             top = q.queue[0]
-    #             bottom = q.queue[-1]
-    #             q.queue[0] = bottom
-    #             q.queue[-1] = top
-    #             q.put(i)
-    #         elif len(q.queue) % 2 == 0:
-    #             m = len(q.queue) / 2
-    #             mid = q.queue[m]
-    #             q.queue[m] = i
-    #             last = q.queue[-1]
-    #             q.queue[-1] = mid
-    #             q.put(last)
-    #         else:
-    #             m = len(q.queue) / 2
-    #             mid = q.queue[m]
-    #             q.queue[m] = i
-    #             q.put(mid)
-    #     else:
-    #         q.put(i)
-    #     return q
 
     def __update_future_queue__(self, data):
         """Update the queue for the hybrid model"""

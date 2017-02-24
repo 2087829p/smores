@@ -29,6 +29,7 @@ class Minion(threading.Thread):
             #with self._lock:
             self._task = self._scheduler.request_work(self._task)
             if self._task['site'] == 'sleep':
+                print "%s sleeping for %f seconds" % (self.name,self._task['time'])
                 with self._cond:
                     self._cond.wait(self._task['time'])
             else:
@@ -61,6 +62,7 @@ class Minion(threading.Thread):
                 print 'executing ' + str(self._task['op'])
                 fetch = self._task['fetch']
             if self._task['plugins'] and self._task['op']!=TASK_EXPLORE:
+
                 for p in self._task['plugins']:
                     p.data_available(data)
             time.sleep(POLITENESS_VALUE)
@@ -78,6 +80,7 @@ class Streamion(Minion):
         self._streamer.disconnect()
 
     def run(self):
+        print "Starting streamer"
         self._streamer = TwitterStreamer(self._creds['app_key'], self._creds['app_secret']
                                          , self._creds['oauth_token'], self._creds['oauth_token_secret'])
         self._twitter = TwitterHandler(self._creds,id=self._creds['id'])
@@ -100,5 +103,6 @@ class Streamion(Minion):
             trends = self._scheduler.__get_top_n_trends__(MAX_TACKABLE_TOPICS)
             follow = self._scheduler.__get_top_n_accounts__(MAX_FOLLOWABLE_USERS)
             if not trends:
+                print "Requesting trends"
                 trends = self._twitter.get_trends(self._task['data'])
                 # self._streamer.disconnect()

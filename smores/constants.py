@@ -16,9 +16,10 @@ TASK_FETCH_FACEBOOK_USERS = 10
 TOTAL_TASKS = 11
 # twitter control constants
 TESTING = False
+EXPLORING = False
 POLITENESS_VALUE = 2  # how long the worker should sleep for used to prevent twitter from getting overloaded
 TWITTER_MAX_LIST_SIZE = 5000
-TWITTER_MAX_NUMBER_OF_LISTS = 900  # 180#can be changed to 1000 but retrieval of tweets from all lists not guaranteed
+TWITTER_MAX_NUMBER_OF_LISTS = 900  #can be changed to 1000 but retrieval of tweets from all lists not guaranteed
 TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS = 900  # 180
 TWITTER_BULK_LIST_SIZE = 100
 TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE = 900  # 60
