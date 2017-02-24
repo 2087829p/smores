@@ -1484,6 +1484,8 @@ class MockTwitter:
     def create_list_members(self, **kwargs):
         if len(kwargs['user_id']) > self.user_list_size:
             self.list_member_fail = True
+        if random.choice([True,False]):
+          raise Exception('test error')
         return {'id': 5}
 
     def create_list(self, **kwargs):
@@ -1551,6 +1553,8 @@ class MockTwitter:
         if self.lookup<0:
             self.backed_off=False
         return fake_tweets
+    def add_list_member(self, **kwargs):
+        return []
 
     def passed(self):
         return len(self.get_failures()) == 0

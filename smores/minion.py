@@ -5,6 +5,7 @@ from handlers import TwitterStreamer, TwitterHandler
 import time
 from constants import *
 import datetime
+import copy
 
 
 class Minion(threading.Thread):
@@ -39,11 +40,12 @@ class Minion(threading.Thread):
         return work_set
 
 
+
     def run(self):
-        work_set = self._task['data']
+        work_set = copy.deepcopy(self._task['data'])
         fetch = self._task['fetch']
         data = []
-        print 'executing ' + str(self._task['op'])
+        #print 'executing ' + str(self._task['op'])
         while self._is_running:
             if not work_set:
                 work_set = self.__request_work__(work_set)
@@ -62,7 +64,6 @@ class Minion(threading.Thread):
                 print 'executing ' + str(self._task['op'])
                 fetch = self._task['fetch']
             if self._task['plugins'] and self._task['op']!=TASK_EXPLORE:
-
                 for p in self._task['plugins']:
                     p.data_available(data)
             time.sleep(POLITENESS_VALUE)

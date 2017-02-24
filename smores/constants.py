@@ -17,7 +17,7 @@ TOTAL_TASKS = 11
 # twitter control constants
 TESTING = False
 EXPLORING = False
-POLITENESS_VALUE = 2  # how long the worker should sleep for used to prevent twitter from getting overloaded
+POLITENESS_VALUE = 0.5  # how long the worker should sleep for used to prevent twitter from getting overloaded
 TWITTER_MAX_LIST_SIZE = 5000
 TWITTER_MAX_NUMBER_OF_LISTS = 900  #can be changed to 1000 but retrieval of tweets from all lists not guaranteed
 TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS = 900  # 180

@@ -460,7 +460,7 @@ class Scheduler:
             # Yes then get data for the task
             t = self._tasks.get()[1]
             if t['op'] == TASK_EXPLORE:
-                data = st.load_explorer_data()
+                t['data'] = st.load_explorer_data()
                 break
             # try to get data for the task
             data = self.__get_data__(t['op'])

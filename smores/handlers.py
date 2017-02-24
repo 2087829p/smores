@@ -16,6 +16,7 @@ import test_struct as test
 import pytumblr
 import threading
 import facebook
+import time
 
 # stream = MyStreamer(APP_KEY, APP_SECRET,
 # OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
@@ -124,17 +125,20 @@ class TwitterHandler:
                     try:
                         take = min(constants.TWITTER_ADD_TO_LIST_LIMIT, take)
                         # use the api to add the new users to the list
-                        self._twitter.create_list_members(list_id=lists[-1]['id'], user_id=candidates[:take])
-                        if take + 1 < len(candidates):
-                            self._twitter.add_list_member(list_id=lists[-1]['id'], user_id=candidates[take+1])
-                            take += 1
                         self._list_attempts -= 1
+                        self._twitter.create_list_members(list_id=lists[-1]['id'], user_id=candidates[:take])
+
                         # update the size of the list
                         lists[-1]['count'] = lists[-1]['count'] + take
-
                     except Exception as e:
-                        print "User could not be added to list cause: %s" % e.message
-                        self._list_attempts = 0
+                        print "Users could not be added to list in bulk cause: %s" % e.message
+                        print "Trying to add users 1 by 1"
+                        try:
+                            self._twitter.add_list_member(list_id=lists[-1]['id'], user_id=candidates[0])
+                            lists[-1]['count'] = lists[-1]['count'] + 1
+                        except Exception as e:
+                            print "Adding users to list failed cause: %s" % e.message
+                            self._list_attempts = 0
                         # error occurred can not put anything into the list return the remaining number of candidates
                         return candidates
                 else:
@@ -243,7 +247,7 @@ class TwitterHandler:
             # get the people who we are following
             following = self._twitter.get_friends_ids(screen_name=data['screen_name'])
             print "%d users followed online" % len(following['ids'])
-            total_followed += following['ids'] +( [i for sl in bulk_lists for i in sl['id']] if bulk_lists else [])
+            total_followed += following['ids'] +([i for sl in bulk_lists for i in sl['ids']] if bulk_lists else [])
             print "%d total users followed offline" % (len(total_followed)-len(following['ids']))
             # get the total number of twitter users that we follow including bulk list users and twitter list users as well as non followed users
             # total_followed=set(following).add(self._users).add(self.get_list_members())
@@ -259,6 +263,8 @@ class TwitterHandler:
                     else:
                         print "Could not retrieve data for slug = " + str(s['name']) + " due to " + e.message
                     continue
+                new_users = sorted(new_users, key=lambda k: k['friends_count'])
+                new_users.reverse()
                 new_users = [u['id'] for u in user_filter(new_users)]
                 friends = []
                 if ff_requests[0] > 0 or ff_requests[1] > 0:
@@ -304,16 +310,18 @@ class TwitterHandler:
         data = []
         max_attempts = 15  # 15 is the max number of requests we can send for our timeline
         current_id = task_data["id"]
+        update_fq = 60
         while max_attempts > 0:
             temp_data = []
             if current_id == 0:
                 temp_data += self._twitter.get_home_timeline()
                 current_id = temp_data[-1]["id"]
                 task_data["id"] = temp_data[0]["id"]
-            elif 'since' in task_data:
+            elif task_data.get('since',False):
                 temp_data += self._twitter.get_home_timeline(since_id=current_id)
                 current_id = temp_data[0]["id"]
                 task_data["id"] = current_id
+                time.sleep(update_fq)
             else:
                 temp_data += self._twitter.get_home_timeline(max_id=current_id)
                 current_id = temp_data[-1]["id"]
