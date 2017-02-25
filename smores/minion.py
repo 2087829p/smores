@@ -82,6 +82,12 @@ class Streamion(Minion):
         super(Streamion, self).interrupt()
         self._streamer.disconnect()
 
+    def data_available(self,data):
+        if self._task['plugins']:
+            for p in self._task['plugins']:
+                p.data_available(data)
+        self._task['store'](data)
+
     def run(self):
         print "Starting streamer"
         import constants as c
@@ -89,9 +95,8 @@ class Streamion(Minion):
         self._streamer = TwitterStreamer(self._creds['app_key'], self._creds['app_secret']
                                          , self._creds['oauth_token'], self._creds['oauth_token_secret']) if not c.TESTING else Mock_Twitter_Stream(self._creds)
         self._twitter = TwitterHandler(self._creds, id=self._creds['id'])
-        self._streamer.set_callback(self._task['store'])
+        self._streamer.set_callback(self.data_available)
         # if an error occurs e.g. no internet or twitter is inaccessible terminate thread
-        # HAS NEVER BEEN TESTED WORKS IN THEORY BUT MIGHT BE BUGGY
         self._streamer.set_error_handler(self.interrupt)
         # a handy functional expression to check if the trends data is data or list of locations for which we want trends
         contains_locations = lambda x: isinstance(x, list) and any([('location' in i or 'woeid' in i) for i in x])
@@ -99,15 +104,19 @@ class Streamion(Minion):
             else self._twitter.get_trends(self._task['data'])
         follow = []
         while (self._is_running):
-            if follow:
-                self._streamer.statuses.filter(track=','.join(trends[:MAX_TACKABLE_TOPICS]), follow=','.join(follow))
-            else:
-                self._streamer.statuses.filter(track=','.join(trends[:MAX_TACKABLE_TOPICS]))
-            with self._cond:
-                self._cond.wait(RUNNING_CYCLE)
-            trends = self._scheduler.__get_top_n_trends__(MAX_TACKABLE_TOPICS)
-            follow = self._scheduler.__get_top_n_accounts__(MAX_FOLLOWABLE_USERS)
-            if not trends:
-                print "Requesting trends"
-                trends = self._twitter.get_trends(self._task['data'])
+            "Collecting stream data"
+            try:
+                if follow:
+                    self._streamer.statuses.filter(track=', '.join(trends[:MAX_TACKABLE_TOPICS]), follow=','.join(follow))
+                else:
+                    self._streamer.statuses.filter(track=', '.join(trends[:MAX_TACKABLE_TOPICS]))
+                with self._cond:
+                    self._cond.wait(RUNNING_CYCLE)
+                trends = self._scheduler.__get_top_n_trends__(MAX_TACKABLE_TOPICS)
+                follow = self._scheduler.__get_top_n_accounts__(MAX_FOLLOWABLE_USERS)
+                if not trends:
+                    print "Requesting trends"
+                    trends = self._twitter.get_trends(self._task['data'])
+            except Exception as e:
+                print "Streamion encountered and error: %s" % e.message
         self._streamer.disconnect()

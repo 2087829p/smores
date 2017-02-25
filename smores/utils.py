@@ -102,6 +102,7 @@ class NeuralNetwork:
 
 
 class CrawlTimer(threading.Thread):
+    # ref:http://stackoverflow.com/questions/9812344/cancellable-threading-timer-in-python
     def __init__(self, wait_for, function, **kwargs):
         threading.Thread.__init__(self)
         self.event = threading.Event()

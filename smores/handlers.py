@@ -19,9 +19,7 @@ import facebook
 import time
 import copy
 
-# stream = MyStreamer(APP_KEY, APP_SECRET,
-# OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
-#stream.statuses.filter(track='twitter')
+
 class TwitterStreamer(TwythonStreamer):
     def set_callback(self, callback):
         self._callback = callback
@@ -30,12 +28,11 @@ class TwitterStreamer(TwythonStreamer):
         self._error_handler = handler
 
     def on_success(self, data):
-        if 'text' in data:
+        if data:
             self._callback(data)
 
     def on_error(self, status_code, data):
         print status_code
-        #self.disconnect()
         self._error_handler()
 
 
@@ -93,19 +90,6 @@ class TwitterHandler:
         # checks if any operation has been time limited and if so checks if the time limit has passed
         return any(d + datetime.timedelta(minutes=15) < datetime.datetime.now() for d in self._wait_for)
 
-    #get the ids of all members of lists that the crawler has
-    # def get_list_members(self,lists):
-    #     list_members=[]
-    #     try:
-    #         if lists:
-    #             #lists=self._handlers.show_lists()
-    #             #self._user_lists=[ul['list_id'] for ul in self._user_lists]
-    #             for l in self._user_lists:
-    #                 list_members+=self._handlers.get_list_members(list_id=l)
-    #     except:
-    #         print "An Error Occurred"
-    #     return list_members
-
     # Tries to fit new twitter accounts into either the twitter lists or the bulk lists
     def fit_to_lists(self, candidates, lists, max_list_num, max_list_size, is_twitter_list):
         """ Tries to fit the given candidate users in to either a twitter list or in to a bulk list  """
@@ -116,7 +100,7 @@ class TwitterHandler:
             return []
         # check if we have any lists and if the last list has enough space to fit any of the candidates
         if len(lists) > 0 and lists[-1]['count'] < max_list_size:
-                # determine the max amount of users the list can take
+                # determine the max amount of users the list can take have no more than the remaining capacity of the list
                 take = min(max_list_size - lists[-1]['count'], len(candidates))
                 # determine whether the candidates should go to the twitter lists or bulk lists
                 if is_twitter_list:
@@ -128,11 +112,11 @@ class TwitterHandler:
                         # use the api to add the new users to the list
                         self._list_attempts -= 1
                         self._twitter.create_list_members(list_id=lists[-1]['id'], user_id=candidates[:take])
-
                         # update the size of the list
                         lists[-1]['count'] = lists[-1]['count'] + take
                     except Exception as e:
                         print "Users could not be added to list in bulk cause: %s" % e.message
+                        # twitter's bulk adding is bugged
                         print "Trying to add users 1 by 1"
                         try:
                             self._twitter.add_list_member(list_id=lists[-1]['id'], user_id=candidates[0])
@@ -194,12 +178,12 @@ class TwitterHandler:
                         time.sleep(random.randint(1,15))  #sleep for random amount of seconds to avoid twitter thinking that we're automated
                     except:
                         print "Could not follow user " + str(candidates[i])
+                        return candidates
                 candidates = candidates[take:]
             if candidates:
                 # if there are some users remaining see if we have space to follow their timeline without following them
-                #if len(users) < constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS:
                 take = min(constants.TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS, len(candidates))
-                members = candidates[:take]  #[{'id': c, 'current_tweet': 0} for c in candidates[:take]]
+                members = candidates[:take]
                 users += members
                 if self._scheduler:
                     self._scheduler.__put_data__(constants.TASK_FETCH_USER, members)
@@ -236,12 +220,12 @@ class TwitterHandler:
     # attempts to find new accounts to follow
     def explore(self, args):
         """Find new users to follow"""
-        remaining = args.get('remaining',[])#args['remaining'] if 'remaining' in args.keys() else []
+        remaining = args.get('remaining',[])
         candidates = []
         self._list_attempts = 15
-        user_lists = args.get('user_lists',[])#args['user_lists'] if 'user_lists' and args['user_lists'] in args.keys() else []
-        bulk_lists = args.get('bulk_lists',[])#args['bulk_lists'] if 'bulk_lists' and args['bulk_lists'] in args.keys() else []
-        users = args.get('total_followed',[])#args['users'] if 'users' in args.keys() else []
+        user_lists = args.get('user_lists',[])
+        bulk_lists = args.get('bulk_lists',[])
+        users = args.get('total_followed',[])
         total_followed = copy.deepcopy(users)
         try:
             # get our suggested categories
@@ -254,7 +238,6 @@ class TwitterHandler:
             total_followed += following['ids'] +([i for sl in bulk_lists for i in sl['ids']] if bulk_lists else [])
             print "%d total users followed offline" % (len(total_followed)-len(following['ids']))
             # get the total number of twitter users that we follow including bulk list users and twitter list users as well as non followed users
-            # total_followed=set(following).add(self._users).add(self.get_list_members())
             ff_requests = [14, 15]  #friends_ids and followers_ids requests remaining
             for s in [random.choice(slugs) for i in xrange(15)]:
                 # get some suggested users in the given category
@@ -321,19 +304,29 @@ class TwitterHandler:
         while max_attempts > 0:
             temp_data = []
             if current_id == 0:
+                # if first run
+                # get timeline
                 temp_data += self._twitter.get_home_timeline()
+                # set current_id to the last id since we will request the old timeline
                 current_id = temp_data[-1]["id"]
+                # set task id to the top id since next time we will request the up to date timeline
                 task_data["id"] = temp_data[0]["id"]
             elif task_data.get('since',False):
+                # requesting only new tweets
+                # sleep for 1 min to allow the timeline to refresh
                 time.sleep(update_fq)
+                # get data
                 temp_data += self._twitter.get_home_timeline(since_id=current_id)
+                # update current id and task id
                 current_id = temp_data[0]["id"]
                 task_data["id"] = current_id
             else:
+                # collecting data for old tweets
                 temp_data += self._twitter.get_home_timeline(max_id=current_id)
                 current_id = temp_data[-1]["id"]
             data += temp_data
             max_attempts -= 1
+        # tell worker that next time we want the new tweets only
         task_data['since'] = True
         st.save_data(task_data,constants.TWITTER_WALL_STORAGE)
         return data
@@ -370,33 +363,40 @@ class TwitterHandler:
         if max_attempts == 0:
             return []
         if 'woeid' in args:
+            # search for trends at a location with a specific where on earth id
             try:
+                # go through left over woeids
                 for w in args['woeid'][:max_attempts]:
-                    trends += trend_filter(self._twitter.get_place_trends(id=w)['trends'])
+                    tmp = self._twitter.get_place_trends(id=w)
+                    for t in tmp:
+                        # filter each group of trends
+                        trends+=trend_filter(t['trends'])
                     max_attempts -= 1
             except:
                 return trends
         elif 'lat' in args and 'long' in args:
+            # search for trends in a given geo box based on lat and long
             try:
-                trends = trend_filter(self._twitter.get_closest_trends(lat=args['lat'], long=args['long'])['trends'])
+                tmp = self._twitter.get_closest_trends(lat=args['lat'], long=args['long'])
+                for t in tmp:
+                    trends += trend_filter(t['trends'])
             except:
                 return trends
         else:
+            # no location specified or the location is specified by name
+            # get relevant locations
             locations = self._twitter.get_available_trends()
             if 'location' in args:
+                # if any locations were specified by name filter the woeids based on region
                 loc = args['location'].lower()
                 locations = filter(lambda x: x['country'].lower() == loc or
                                              x['name'].lower() == loc or
                                              x['countryCode'].lower() == loc,
                                    locations)
+            # get woeids
             locations = map(lambda x: x['woeid'], locations)
-            i = 0
-            for l in locations:
-                if i == constants.MAX_TWITTER_TRENDS_REQUESTS:
-                    break
-                else:
-                    trends += self.get_trends(dict(woeid=l,attempts=max_attempts))
-                    i += 1
+            # get trends
+            trends += self.get_trends(dict(woeid=locations,attempts=max_attempts))
         return trends
 
 

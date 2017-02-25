@@ -104,11 +104,25 @@ class StatsFilter(Filter):
 
     def process(self,data):
         print "processing data"
-        for t in data:
-            self.unique_users.add(t['user']['id'])
-            self.unique_tweets.add(t['id'])
-            self.total_tweets += 1
-        print "data processed"
+        if not isinstance(data,list):
+            try:
+                self.unique_users.add(data['user']['id'])
+                self.unique_tweets.add(data['id'])
+                self.total_tweets += 1
+                print "1 tweet processed"
+            except Exception as e:
+                print "Error in tweet format: %s" % e.message
+        else:
+            success = 0
+            for t in data:
+                try:
+                    self.unique_users.add(t['user']['id'])
+                    self.unique_tweets.add(t['id'])
+                    self.total_tweets += 1
+                    success += 1
+                except Exception as e:
+                    print "Error in tweet format: %s" % e.message
+            print "%d tweets processed" % success
 
 def explore_only():
     c.EXPLORING = True
@@ -135,8 +149,8 @@ def model_comparison():
     # db2.set_db_context(strm)
     f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE,lambda x:x,None)
     f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE,lambda x:x,None)
-    c.TESTING=True
-    sh = s.Scheduler(use='both', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=False)
+    #c.TESTING=True
+    sh = s.Scheduler(use='both', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=True)
     sh.start()
     import time
     t = 3600

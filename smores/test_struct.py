@@ -1922,7 +1922,7 @@ class Mock_Twitter_Stream:
     self._error_handler = handler
 
   def on_success(self, data):
-    if 'text' in data:
+    if data:
       self._callback(data)
 
   def on_error(self, status_code, data):
