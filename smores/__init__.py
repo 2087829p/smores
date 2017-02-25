@@ -28,14 +28,14 @@ def stop():
 
 def politeness_test():
     c.TESTING = True
-    sh = s.Scheduler(use='model', site='twitter',multicore=True)
+    sh = s.Scheduler(use='model', site='twitter', multicore=True)
     sh.start()
     import time
     t = 600
     try:
-        while t>0:
+        while t > 0:
             time.sleep(1)
-            t-=1
+            t -= 1
     except KeyboardInterrupt:
         pass
     sh.terminate()
@@ -98,22 +98,25 @@ class StatsFilter(Filter):
     def __init__(self, service, store, filters):
         super(StatsFilter, self).__init__(service, store, filters)
         self.unique_users = set()
-        #self.total_users = 0
+        # self.total_users = 0
         self.total_tweets = 0
-        self.unique_tweets=set()
+        self.unique_tweets = set()
+        self.lost_data = 0
 
-    def process(self,data):
-        print "processing data"
-        if not isinstance(data,list):
+    def process(self, data):
+        #print "processing data"
+        if not isinstance(data, list):
             try:
                 self.unique_users.add(data['user']['id'])
                 self.unique_tweets.add(data['id'])
                 self.total_tweets += 1
                 print "1 tweet processed"
             except Exception as e:
-                print "Error in tweet format: %s" % e.message
+                #print "Error in tweet format: " + str(data)
+                self.lost_data += 1
         else:
             success = 0
+            #print "data in %d" % len(data)
             for t in data:
                 try:
                     self.unique_users.add(t['user']['id'])
@@ -121,25 +124,29 @@ class StatsFilter(Filter):
                     self.total_tweets += 1
                     success += 1
                 except Exception as e:
-                    print "Error in tweet format: %s" % e.message
+                    #print "Error in tweet format: " + str(t)
+                    self.lost_data += 1
             print "%d tweets processed" % success
+
 
 def explore_only():
     c.EXPLORING = True
-    #c.TESTING = True
-    sh = s.Scheduler(use='model', site='twitter', storage=lambda x:x,multicore=False)
+    c.TESTING = True
+    sh = s.Scheduler(use='model', site='twitter', storage=lambda x: x, multicore=False)
     sh.start()
     import time
     t = 3600
     try:
-        while t>0:
+        while t > 0:
             time.sleep(1)
-            t-=1
+            t -= 1
     except KeyboardInterrupt:
         pass
     sh.terminate()
+
+
 def model_comparison():
-    #import storage, time
+    # import storage, time
 
     # mdb = "mdb" + time.strftime("%x")
     # db1 = storage.StorageSystem('localhost', 0, 10)
@@ -147,29 +154,33 @@ def model_comparison():
     # strm = "strm" + time.strftime("%x")
     # db2 = storage.StorageSystem('localhost', 0, 4)
     # db2.set_db_context(strm)
-    f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE,lambda x:x,None)
-    f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE,lambda x:x,None)
-    #c.TESTING=True
-    sh = s.Scheduler(use='both', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=True)
+    f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE, lambda x: x, None)
+    f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE, lambda x: x, None)
+    # c.TESTING=True
+    sh = s.Scheduler(use='stream', site='twitter', storage=lambda x: x, plugins=[f1, f2], multicore=True)
     sh.start()
+    from time import gmtime, strftime
+    print "Test started at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
     import time
     t = 3600
     try:
-        while t>0:
+        while t > 0:
             time.sleep(1)
-            t-=1
+            t -= 1
     except KeyboardInterrupt:
         pass
     sh.terminate()
-    #db1.shutdown()
-    #db2.shutdown()
-    #from concurrent import futures
+    # db1.shutdown()
+    # db2.shutdown()
+    # from concurrent import futures
     print "\nHarvester data"
-    print "total tweets = %d\nunique tweets = %d\nunique users = %d\n" %(f2.total_tweets,len(f2.unique_tweets),len(f2.unique_users))
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\n" % (
+    f2.total_tweets, len(f2.unique_tweets), len(f2.unique_users), f2.lost_data)
     print "Streaming model data"
-    print "total tweets = %d\nunique tweets = %d\nunique users = %d\n" %(f1.total_tweets,len(f1.unique_tweets),len(f1.unique_users))
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\n" % (
+    f1.total_tweets, len(f1.unique_tweets), len(f1.unique_users), f1.lost_data)
 
-    #with futures.ThreadPoolExecutor(max_workers=2) as pool:
+    # with futures.ThreadPoolExecutor(max_workers=2) as pool:
     #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='model')
     #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='streaming')
     sys.exit(0)
@@ -178,8 +189,7 @@ def model_comparison():
 import numpy as np
 from utils import *
 
-
-#politeness_test()
+# politeness_test()
 model_comparison()
 #explore_only()
 # crawl(use='model')

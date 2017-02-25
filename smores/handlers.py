@@ -111,7 +111,7 @@ class TwitterHandler:
                         take = min(constants.TWITTER_ADD_TO_LIST_LIMIT, take)
                         # use the api to add the new users to the list
                         self._list_attempts -= 1
-                        self._twitter.create_list_members(list_id=lists[-1]['id'], user_id=candidates[:take])
+                        self._twitter.create_list_members(list_id=lists[-1]['id'], user_id=','.join(map(lambda x:str(x),candidates[:take])))
                         # update the size of the list
                         lists[-1]['count'] = lists[-1]['count'] + take
                     except Exception as e:
@@ -333,7 +333,8 @@ class TwitterHandler:
 
     # fetches the specified user's timeline
     def fetch_user_timeline(self, user):
-        return self._twitter.get_user_timeline(user_id=user)  # user = 900 , app = 1500
+        # count is set to 200 since that's the max that twitter would actually return despite the docs saying 3200
+        return self._twitter.get_user_timeline(user_id=user,count=200)  # user = 900 , app = 1500
 
     # fetches the tweets in the specified list of _users
     def fetch_list_tweets(self, list):
@@ -342,18 +343,37 @@ class TwitterHandler:
     # fetches the latest tweets of up to 100 _users
     # as specified in the user_ids list
     def fetch_bulk_tweets(self, user_ids):
-        return self._twitter.lookup_user(user_id=user_ids['ids'])  # user = 900, app = 300
-
+        data = self._twitter.lookup_user(user_id=','.join(map(lambda x:str(x),user_ids['ids'])))  # user = 900, app = 300
+        # convert data from user info to tweet
+        ret_data = []
+        for i in data:
+            if 'status' in i:
+                i['user'] ={'id':i['id']}
+                ret_data.append(i)
+        return ret_data
 
     def search(self, q_params):
+        max_attempts = 180
+        query_max_length = 500
         data = []
         try:
             keywords = q_params['keywords']
-            if len(keywords) > 1:
-                keywords = ' OR '.join(keywords)
-            data = self._twitter.search(q=keywords)
+            keywords.reverse()
+            while max_attempts > 0 and len(keywords)>0:
+                query = keywords[0]
+                if len(keywords) > 1:
+                    current_length = 0
+                    while current_length < query_max_length:
+                        if current_length + 4 + len(keywords[0]) < query_max_length:
+                            query +=' OR ' + keywords.pop()
+                            current_length = len(query)
+                        else:
+                            break
+                #keywords = ' OR '.join(keywords)
+                max_attempts -= 1
+                data += self._twitter.search(q=query,count=100,include_entities=True).get('statuses',[])
         except:
-            pass
+            print "Search failed"
         return data
 
     def get_trends(self, args):

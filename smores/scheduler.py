@@ -140,6 +140,8 @@ class Scheduler:
         self._thread_num = max(1, (cores - len(self._plugins)) / 2) if kwargs.get('multicore', False) else 1
         self._lock = threading.Lock()
         self._trends = kwargs.get('trends', {})
+        if not self._trends or contains_locations(self._trends):
+            self._trends = self.__get_top_n_trends__(-1)
         self._handlers = []
         if c.TESTING:
             self._predefined_store = False
@@ -155,7 +157,7 @@ class Scheduler:
                 self._storage = st.StorageSystem(kwargs['ip'], kwargs['port'], self._thread_num)
                 self._store = self._storage.write
                 self._predefined_store = False
-                self._thread_num += 1 if kwargs.get('multicore', False) else 0
+            self._thread_num += 1 if kwargs.get('multicore', False) else 0
         self._use = kwargs.get('use', TWITTER_CYCLE_HARVESTER)
         self._target_queue = dict()
         self._target_queue['tumblr_tags'] = kwargs.get('tumblr_tags', [])
@@ -222,6 +224,10 @@ class Scheduler:
     def __setup_minions__(self):
         self._tasks = self.__prepare_work__()
         unique_ops = len(set([t[1]['op'] for t in self._tasks.queue]))
+        if self._use == TWITTER_HYBRID_MODEL or self._use == TWITTER_STREAMING_HARVESTER_NON_HYBRID:
+            #if we are using both minions and streaming add an extra minion
+            # this is done to avoid stalling due to too low thread count and getting stuck in slow ops
+            self._thread_num += 1
         self._thread_num = min(self._thread_num, unique_ops)
         for i in range(self._thread_num):
             task = self._tasks.get_nowait()[1]
@@ -284,16 +290,16 @@ class Scheduler:
         twitters = filter(lambda x: isinstance(x, handlers.TwitterHandler), self._handlers)
         for i in range(len(twitters)):
             t = twitters[i]
-            tasks.put((0, {'site': 'twitter', 'op': TASK_EXPLORE,
-                           'data': {'remaining': remaining_users,
-                                    'bulk_lists': flatten(bulk_lists),
-                                    'total_followed': flatten(users),
-                                    'user_lists': flatten(lists),
-                                    },
-                           'fetch': t.explore,
-                           'store': st.save_candidates,
-                           'plugins': twitter_plugins,
-                           'acc_id': t.id}))
+            # tasks.put((0, {'site': 'twitter', 'op': TASK_EXPLORE,
+            #                'data': {'remaining': remaining_users,
+            #                         'bulk_lists': flatten(bulk_lists),
+            #                         'total_followed': flatten(users),
+            #                         'user_lists': flatten(lists),
+            #                         },
+            #                'fetch': t.explore,
+            #                'store': st.save_candidates,
+            #                'plugins': twitter_plugins,
+            #                'acc_id': t.id}))
             if not c.EXPLORING:
                 tasks.put((0, {'site': 'twitter', 'op': TASK_UPDATE_WALL,
                                'data': timeline, 'fetch': t.fetch_home_timeline,
@@ -310,6 +316,9 @@ class Scheduler:
                 tasks.put((0, {'site': 'twitter', 'op': TASK_FETCH_USER,
                                'data': users[i] if len(users) > i else [], 'fetch': t.fetch_user_timeline,
                                'store': store, 'plugins': twitter_plugins, 'acc_id': t.id}))
+                tasks.put(0, {'site': 'twitter', 'op': TASK_TWITTER_SEARCH,
+                              'data': self.__get_top_n_trends__(-1), 'fetch': t.search,
+                              'store': store, 'plugins': twitter_plugins, 'acc_id': t.id})
         return tasks
 
     def __prepare_tumblr__(self, tasks, login):
@@ -374,7 +383,25 @@ class Scheduler:
         return nlargest(n, self._target_queue["users"])
 
     def __get_top_n_trends__(self, n):
-        return nlargest(n, self._trends)
+        if self._use == TWITTER_HYBRID_MODEL:
+            return nlargest(n, self._trends)
+        else:
+            try:
+                if c.TIME_TO_UPDATE_TRENDS < time.time():
+                    twitter = filter(lambda x: isinstance(x, handlers.TwitterHandler), self._handlers)[0]
+                    #self._trends = twitter.get_trends()
+                    # if a location was specified in the trends tell the handler if not just request
+                    self._trends = twitter.get_trends(self._trends) if contains_locations(self._trends) \
+                        else twitter.get_trends(dict())
+                    c.TIME_TO_UPDATE_TRENDS = time.time() + RUNNING_CYCLE
+                if n == -1:
+                    return self._trends
+                out =  self._trends[:n]
+                self._trends = self._trends[n:]
+                return out
+            except:
+                pass
+        return []
 
     def __get_data__(self, task):
         if self._use == TWITTER_HYBRID_MODEL and self._target_queue['users'] and task in [TASK_FETCH_USER,
@@ -452,6 +479,9 @@ class Scheduler:
                 break
             if t['op'] == TASK_UPDATE_WALL:
                 t['data'] = st.load_data(TWITTER_WALL_STORAGE)
+                break
+            if t['op'] == TASK_TWITTER_SEARCH:
+                t['data'] = self.__get_top_n_trends__(-1)
                 break
             # try to get data for the task
             data = self.__get_data__(t['op'])

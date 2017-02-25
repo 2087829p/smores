@@ -18,6 +18,9 @@ def fit_in_range(min, max, x):
 get_tweet_timestamp = lambda t:time.mktime(time.strptime(t["created_at"], "%a %b %d %H:%M:%S +0000 %Y"))
 flatten = lambda l: [i for sl in l for i in sl]
 user_filter = lambda x:filter(lambda y:y['protected']==False and y['statuses_count']>150,x)
+# a handy functional expression to check if the trends data is data or list of locations for which we want trends
+contains_locations = lambda x: isinstance(x, list) and any(
+                        [('location' in i or 'woeid' in i or 'lat' in i or 'long' in i) for i in x])
 class KMeanClassifier:
     def __init__(self):
         self._pos = [0.0 for i in range(RUNNING_CYCLE)]

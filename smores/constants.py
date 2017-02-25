@@ -13,7 +13,8 @@ TASK_GET_TAGGED = 7
 TASK_GET_BLOG_POSTS = 8
 TASK_GET_FACEBOOK_WALL = 9
 TASK_FETCH_FACEBOOK_USERS = 10
-TOTAL_TASKS = 11
+TASK_TWITTER_SEARCH = 11
+TOTAL_TASKS = 12
 # twitter control constants
 TESTING = False
 EXPLORING = False
@@ -31,14 +32,13 @@ TWITTER_CYCLES_PER_HOUR = 4
 TWITTER_CYCLE_DURATION = 15
 RUNNING_CYCLE = 900  # 15*60seconds
 MAX_TWEETS_PER_CYCLE = 25
-MAX_TACKABLE_TOPICS = 400
+MAX_TRACKABLE_TOPICS = 400
 MAX_FOLLOWABLE_USERS = 5000
 # tumblr control
 TUMBLR_MAX_REQUESTS_PER_DAY = 5000
 TUMBLR_MAX_REQUESTS_PER_HOUR = 250
 # facebook control
 FACEBOOK_MAX_REQUESTS_PER_HOUR = 200
-
 
 # storage locations
 TWITTER_BULK_LIST_STORAGE = 'data/twitter/bulk_lists'
@@ -50,15 +50,11 @@ TWITTER_CREDENTIALS = 'data/twitter/login'
 PROXY_LOCATION = 'data/proxies'
 RANKING_FILTER_CLASSIFIER = 'data/classifier'
 
-# other control constants
-RANK_RESET_TIME = 600  # every 10 mins
-
 # Model names
 TWITTER_STREAMING_BUCKET_MODEL = 'stream'
 TWITTER_CYCLE_HARVESTER = 'harvester'
 TWITTER_HYBRID_MODEL = 'hybrid'
 TWITTER_STREAMING_HARVESTER_NON_HYBRID = 'both'
-
 
 # Service plugins
 CRAWLER_PLUGIN_SERVICE = 1  # redirect all outputs to the plugin
@@ -70,7 +66,10 @@ FACEBOOK_PLUGIN_SERVICE = 104  # redirect facebook output to plugin
 
 
 # Ranking Classifiers
-
 PERCEPTRON_CLASSIFIER = 201
 DEEP_NEURAL_NETWORK_CLASSIFIER = 202
 K_MEANS_CLASSIFIER = 203
+
+# other control constants and variables
+RANK_RESET_TIME = 600  # every 10 mins
+TIME_TO_UPDATE_TRENDS = 0

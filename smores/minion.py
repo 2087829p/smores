@@ -6,6 +6,7 @@ import time
 from constants import *
 import datetime
 import copy
+from twython import TwythonRateLimitError,TwythonError
 
 
 
@@ -59,12 +60,22 @@ class Minion(threading.Thread):
                     print self.name + ' executing ' + str(self._task['op'])
                     data = fetch(work_set)
                     work_set = []
-            except Exception as e:
-                print "Thread" + str(self.name) + " encountered error " + e.message + " task num = " + str(
-                    self._task['op'])
+            except TwythonRateLimitError as le:
+                # we're told to back off so we back off
                 work_set = self.__request_work__([])
                 print 'executing ' + str(self._task['op'])
                 fetch = self._task['fetch']
+            except TwythonError as te:
+                # twitter is telling us that there's a problem with the query
+                if not te.error_code in [401,404]:
+                    # if its not a missing item or unauthorized access then we should back off
+                    work_set = self.__request_work__([])
+                    print 'executing ' + str(self._task['op'])
+                    fetch = self._task['fetch']
+            except Exception as e:
+                # something else happened just tell the user
+                print "Thread" + str(self.name) + " encountered error " + e.message + " task num = " + str(
+                    self._task['op'])
             if self._task['plugins'] and self._task['op'] != TASK_EXPLORE:
                 for p in self._task['plugins']:
                     p.data_available(data)
@@ -99,24 +110,25 @@ class Streamion(Minion):
         # if an error occurs e.g. no internet or twitter is inaccessible terminate thread
         self._streamer.set_error_handler(self.interrupt)
         # a handy functional expression to check if the trends data is data or list of locations for which we want trends
-        contains_locations = lambda x: isinstance(x, list) and any([('location' in i or 'woeid' in i) for i in x])
-        trends = self._task['data'] if contains_locations(self._task['data']) \
-            else self._twitter.get_trends(self._task['data'])
+        #contains_locations = lambda x: isinstance(x, list) and any([('location' in i or 'woeid' in i) for i in x])
+        #trends = self._task['data'] if contains_locations(self._task['data']) \
+        #    else self._twitter.get_trends(self._task['data'])
+        trends = self._task['data']
         follow = []
         while (self._is_running):
             "Collecting stream data"
             try:
                 if follow:
-                    self._streamer.statuses.filter(track=', '.join(trends[:MAX_TACKABLE_TOPICS]), follow=','.join(follow))
+                    self._streamer.statuses.filter(track=','.join(trends[:MAX_TRACKABLE_TOPICS]), follow=','.join(follow))
                 else:
-                    self._streamer.statuses.filter(track=', '.join(trends[:MAX_TACKABLE_TOPICS]))
+                    self._streamer.statuses.filter(track=','.join(trends[:MAX_TRACKABLE_TOPICS]))
                 with self._cond:
                     self._cond.wait(RUNNING_CYCLE)
-                trends = self._scheduler.__get_top_n_trends__(MAX_TACKABLE_TOPICS)
+                trends = self._scheduler.__get_top_n_trends__(MAX_TRACKABLE_TOPICS)
                 follow = self._scheduler.__get_top_n_accounts__(MAX_FOLLOWABLE_USERS)
-                if not trends:
-                    print "Requesting trends"
-                    trends = self._twitter.get_trends(self._task['data'])
+                #if not trends:
+                #    print "Requesting trends"
+                 #   trends = self._twitter.get_trends(self._task['data'])
             except Exception as e:
                 print "Streamion encountered and error: %s" % e.message
         self._streamer.disconnect()
