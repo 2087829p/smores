@@ -17,6 +17,7 @@ import pytumblr
 import threading
 import facebook
 import time
+import copy
 
 # stream = MyStreamer(APP_KEY, APP_SECRET,
 # OAUTH_TOKEN, OAUTH_TOKEN_SECRET)
@@ -72,8 +73,8 @@ class TwitterHandler:
                                                         acc_details['oauth_token'], acc_details['oauth_token_secret'],
                                                         client_args=kwargs['client_args'])
                     else:
-                        self._twitter = twython.Twython("KXou5WEHTTTzwW29Gd5xjF8hp", "VRFioMY3xadxPOXVM898q9eUzaBhN6HlRTEaKeV6RzF8OAIgVz",
-                                                       "782911039369310208-6kImFNvTIfFS4WJplsKmttuq6TDdvWz", "HYOoAlcB1CeSIAqojLGMvH7pAwadAGnPumnmMUtIb0u4t")
+                        self._twitter = twython.Twython(acc_details['app_key'], acc_details['app_secret'],
+                                                        acc_details['oauth_token'], acc_details['oauth_token_secret'])
 
                 self.acc_details = acc_details
             # self._auth=self._handlers.get_authentication_tokens()
@@ -235,12 +236,13 @@ class TwitterHandler:
     # attempts to find new accounts to follow
     def explore(self, args):
         """Find new users to follow"""
-        candidates = args.get('remaining',[])#args['remaining'] if 'remaining' in args.keys() else []
+        remaining = args.get('remaining',[])#args['remaining'] if 'remaining' in args.keys() else []
+        candidates = []
         self._list_attempts = 15
-        total_followed = args.get('total_followed',[])
         user_lists = args.get('user_lists',[])#args['user_lists'] if 'user_lists' and args['user_lists'] in args.keys() else []
         bulk_lists = args.get('bulk_lists',[])#args['bulk_lists'] if 'bulk_lists' and args['bulk_lists'] in args.keys() else []
-        users = args.get('users',[])#args['users'] if 'users' in args.keys() else []
+        users = args.get('total_followed',[])#args['users'] if 'users' in args.keys() else []
+        total_followed = copy.deepcopy(users)
         try:
             # get our suggested categories
             print "collecting slugs"
@@ -273,10 +275,11 @@ class TwitterHandler:
                     for u in new_users:
                         friends += self.__get_friends_and_followers__(u, ff_requests)
                 # get the users which we currently do not follow only
-                candidates += list(set(new_users + friends + users) - set(total_followed))
+                candidates += list(set(new_users + friends) - set(total_followed + remaining))
             # try to fit some of the candidates into the twitter lists
+            print str(len(candidates)) + " new users found"
+            candidates = candidates + remaining
             candidates_total = len(candidates)
-            print str(candidates_total)+" new users found"
             candidates = self.fit_to_lists(candidates, user_lists,
                                            constants.TWITTER_MAX_NUMBER_OF_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_MAX_LIST_SIZE, True)
@@ -287,7 +290,9 @@ class TwitterHandler:
                                            constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_BULK_LIST_SIZE, False)
             print str(candidates_total-len(candidates))+" users added to bulk lists"
+            candidates_total = len(candidates)
             self.__follow_users__(candidates, users, len(following))
+            print "%d users added to offline following" % (candidates_total-len(candidates))
             print str(len(candidates))+" users left unallocated"
         except Exception as e:
             print "Error while exploring " + e.message
@@ -320,17 +325,17 @@ class TwitterHandler:
                 current_id = temp_data[-1]["id"]
                 task_data["id"] = temp_data[0]["id"]
             elif task_data.get('since',False):
+                time.sleep(update_fq)
                 temp_data += self._twitter.get_home_timeline(since_id=current_id)
                 current_id = temp_data[0]["id"]
                 task_data["id"] = current_id
-                time.sleep(update_fq)
             else:
                 temp_data += self._twitter.get_home_timeline(max_id=current_id)
                 current_id = temp_data[-1]["id"]
             data += temp_data
             max_attempts -= 1
         task_data['since'] = True
-        #st.save_data(task_data,constants.TWITTER_WALL_STORAGE)
+        st.save_data(task_data,constants.TWITTER_WALL_STORAGE)
         return data
 
     # fetches the specified user's timeline
@@ -354,28 +359,32 @@ class TwitterHandler:
             if len(keywords) > 1:
                 keywords = ' OR '.join(keywords)
             data = self._twitter.search(q=keywords)
-            pass
         except:
             pass
         return data
 
-    def get_trends(self, **kwargs):
+    def get_trends(self, args):
         trends = []
-        if 'woeid' in kwargs:
+        trend_filter = lambda data:map(lambda x:x['name'],data)
+        max_attempts = args.get('attempts',constants.MAX_TWITTER_TRENDS_REQUESTS)
+        if max_attempts == 0:
+            return []
+        if 'woeid' in args:
             try:
-                for w in kwargs['woeid']:
-                    trends += self._twitter.get_place_trends(w)
+                for w in args['woeid'][:max_attempts]:
+                    trends += trend_filter(self._twitter.get_place_trends(id=w)['trends'])
+                    max_attempts -= 1
             except:
-                pass
-        elif 'lat' in kwargs and 'long' in kwargs:
+                return trends
+        elif 'lat' in args and 'long' in args:
             try:
-                trends = self._twitter.get_closest_trends(lat=kwargs['lat'], long=kwargs['long'])
+                trends = trend_filter(self._twitter.get_closest_trends(lat=args['lat'], long=args['long'])['trends'])
             except:
-                pass
+                return trends
         else:
             locations = self._twitter.get_available_trends()
-            if 'location' in kwargs:
-                loc = kwargs['location'].lower()
+            if 'location' in args:
+                loc = args['location'].lower()
                 locations = filter(lambda x: x['country'].lower() == loc or
                                              x['name'].lower() == loc or
                                              x['countryCode'].lower() == loc,
@@ -386,7 +395,7 @@ class TwitterHandler:
                 if i == constants.MAX_TWITTER_TRENDS_REQUESTS:
                     break
                 else:
-                    trends += self.get_trends(woeid=l)
+                    trends += self.get_trends(dict(woeid=l,attempts=max_attempts))
                     i += 1
         return trends
 
@@ -475,14 +484,6 @@ class FacebookHandler:
     def reset_daily_requests(self):
         with self._lock:
             self._rqs_for_the_day = constants.FACEBOOK_MAX_REQUESTS_PER_HOUR * 24
-
-    # def get_posts_for(self,user):
-    #     if self.__get_rqs_remaining__() <= 0:
-    #         raise Rate_Limit_Error('Facebook rate limit reached')
-    #     self.__dec_remaining_rqs__()
-    #     profile = self._graph.get_object(user)
-    #     self.__dec_remaining_rqs__()
-    #     return self._graph.get_connections(profile['id'], 'posts')
 
     def get_posts_for_users(self, user_ids):
         if len(user_ids) > self.__get_rqs_remaining__():

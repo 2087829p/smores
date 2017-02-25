@@ -462,6 +462,9 @@ class Scheduler:
             if t['op'] == TASK_EXPLORE:
                 t['data'] = st.load_explorer_data()
                 break
+            if t['op'] == TASK_UPDATE_WALL:
+                t['data'] = st.load_data(TWITTER_WALL_STORAGE)
+                break
             # try to get data for the task
             data = self.__get_data__(t['op'])
             if data:

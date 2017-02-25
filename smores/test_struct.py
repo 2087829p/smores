@@ -1422,12 +1422,319 @@ fake_creds={
     "utc_offset": -28800,
     "verified": False
 }
+fake_trends_locations = [
+  {
+    "country": "Sweden",
+    "countryCode": "SE",
+    "name": "Sweden",
+    "parentid": 1,
+    "placeType": {
+      "code": 12,
+      "name": "Country"
+    },
+    "url": "http://where.yahooapis.com/v1/place/23424954",
+    "woeid": 23424954
+  },
+  {
+    "country": "United States",
+    "countryCode": "US",
+    "name": "New Haven",
+    "parentid": 23424977,
+    "placeType": {
+      "code": 7,
+      "name": "Town"
+    },
+    "url": "http://where.yahooapis.com/v1/place/2458410",
+    "woeid": 2458410
+  },
+  {
+    "country": "Japan",
+    "countryCode": "JP",
+    "name": "Sapporo",
+    "parentid": 23424856,
+    "placeType": {
+      "code": 7,
+      "name": "Town"
+    },
+    "url": "http://where.yahooapis.com/v1/place/1118108",
+    "woeid": 1118108
+  },
+  {
+    "country": "United States",
+    "countryCode": "US",
+    "name": "Providence",
+    "parentid": 23424977,
+    "placeType": {
+      "code": 7,
+      "name": "Town"
+    },
+    "url": "http://where.yahooapis.com/v1/place/2477058",
+    "woeid": 2477058
+  },
+  {
+    "country": "United States",
+    "countryCode": "US",
+    "name": "Cincinnati",
+    "parentid": 23424977,
+    "placeType": {
+      "code": 7,
+      "name": "Town"
+    },
+    "url": "http://where.yahooapis.com/v1/place/2380358",
+    "woeid": 2380358
+  }
+]
+fake_trends = [
+  {
+    "trends": [
+      {
+        "name": "#ChainedToTheRhythm",
+        "url": "http://twitter.com/search?q=%23ChainedToTheRhythm",
+        "promoted_content": None,
+        "query": "%23ChainedToTheRhythm",
+        "tweet_volume": 48857
+      },
+      {
+        "name": "George Lopez",
+        "url": "http://twitter.com/search?q=%22George+Lopez%22",
+        "promoted_content": None,
+        "query": "%22George+Lopez%22",
+        "tweet_volume": 90590
+      },
+      {
+        "name": "#FelizMiercoles",
+        "url": "http://twitter.com/search?q=%23FelizMiercoles",
+        "promoted_content": None,
+        "query": "%23FelizMiercoles",
+        "tweet_volume": 36103
+      },
+      {
+        "name": "#wednesdaywisdom",
+        "url": "http://twitter.com/search?q=%23wednesdaywisdom",
+        "promoted_content": None,
+        "query": "%23wednesdaywisdom",
+        "tweet_volume": 42916
+      },
+      {
+        "name": "Tara Palmer-Tomkinson",
+        "url": "http://twitter.com/search?q=%22Tara+Palmer-Tomkinson%22",
+        "promoted_content": None,
+        "query": "%22Tara+Palmer-Tomkinson%22",
+        "tweet_volume": None
+      },
+      {
+        "name": "SLAY CAMILIZERS",
+        "url": "http://twitter.com/search?q=%22SLAY+CAMILIZERS%22",
+        "promoted_content": None,
+        "query": "%22SLAY+CAMILIZERS%22",
+        "tweet_volume": 707166
+      },
+      {
+        "name": "WORK FROM 5H",
+        "url": "http://twitter.com/search?q=%22WORK+FROM+5H%22",
+        "promoted_content": None,
+        "query": "%22WORK+FROM+5H%22",
+        "tweet_volume": 54061
+      },
+      {
+        "name": "Leyla Zana",
+        "url": "http://twitter.com/search?q=%22Leyla+Zana%22",
+        "promoted_content": None,
+        "query": "%22Leyla+Zana%22",
+        "tweet_volume": None
+      },
+      {
+        "name": "#TwoJustin",
+        "url": "http://twitter.com/search?q=%23TwoJustin",
+        "promoted_content": None,
+        "query": "%23TwoJustin",
+        "tweet_volume": None
+      },
+      {
+        "name": "#MyFirstAndLast",
+        "url": "http://twitter.com/search?q=%23MyFirstAndLast",
+        "promoted_content": None,
+        "query": "%23MyFirstAndLast",
+        "tweet_volume": 63844
+      },
+      {
+        "name": "#ValentinesDayIn3Words",
+        "url": "http://twitter.com/search?q=%23ValentinesDayIn3Words",
+        "promoted_content": None,
+        "query": "%23ValentinesDayIn3Words",
+        "tweet_volume": None
+      },
+      {
+        "name": "#ShePersisted",
+        "url": "http://twitter.com/search?q=%23ShePersisted",
+        "promoted_content": None,
+        "query": "%23ShePersisted",
+        "tweet_volume": 45624
+      },
+      {
+        "name": "#HappyJohnnyDay",
+        "url": "http://twitter.com/search?q=%23HappyJohnnyDay",
+        "promoted_content": None,
+        "query": "%23HappyJohnnyDay",
+        "tweet_volume": 28560
+      },
+      {
+        "name": "#QuartaDetremuraSDV",
+        "url": "http://twitter.com/search?q=%23QuartaDetremuraSDV",
+        "promoted_content": None,
+        "query": "%23QuartaDetremuraSDV",
+        "tweet_volume": 10481
+      },
+      {
+        "name": "#TapperDirtFile",
+        "url": "http://twitter.com/search?q=%23TapperDirtFile",
+        "promoted_content": None,
+        "query": "%23TapperDirtFile",
+        "tweet_volume": None
+      },
+      {
+        "name": "#FelizCumplePresidente",
+        "url": "http://twitter.com/search?q=%23FelizCumplePresidente",
+        "promoted_content": None,
+        "query": "%23FelizCumplePresidente",
+        "tweet_volume": 15276
+      },
+      {
+        "name": "#MeCasoSiMeDices",
+        "url": "http://twitter.com/search?q=%23MeCasoSiMeDices",
+        "promoted_content": None,
+        "query": "%23MeCasoSiMeDices",
+        "tweet_volume": None
+      },
+      {
+        "name": "#FebreroZamorista",
+        "url": "http://twitter.com/search?q=%23FebreroZamorista",
+        "promoted_content": None,
+        "query": "%23FebreroZamorista",
+        "tweet_volume": None
+      },
+      {
+        "name": "#NinguemSabeMasEuJa",
+        "url": "http://twitter.com/search?q=%23NinguemSabeMasEuJa",
+        "promoted_content": None,
+        "query": "%23NinguemSabeMasEuJa",
+        "tweet_volume": 12856
+      },
+      {
+        "name": "#HappyChunghaDay",
+        "url": "http://twitter.com/search?q=%23HappyChunghaDay",
+        "promoted_content": None,
+        "query": "%23HappyChunghaDay",
+        "tweet_volume": 16480
+      },
+      {
+        "name": "#DiaDeLaPiscola",
+        "url": "http://twitter.com/search?q=%23DiaDeLaPiscola",
+        "promoted_content": None,
+        "query": "%23DiaDeLaPiscola",
+        "tweet_volume": None
+      },
+      {
+        "name": "#UnBuenTaco",
+        "url": "http://twitter.com/search?q=%23UnBuenTaco",
+        "promoted_content": None,
+        "query": "%23UnBuenTaco",
+        "tweet_volume": None
+      },
+      {
+        "name": "#PMQs",
+        "url": "http://twitter.com/search?q=%23PMQs",
+        "promoted_content": None,
+        "query": "%23PMQs",
+        "tweet_volume": 20406
+      },
+      {
+        "name": "#InteractFalando",
+        "url": "http://twitter.com/search?q=%23InteractFalando",
+        "promoted_content": None,
+        "query": "%23InteractFalando",
+        "tweet_volume": None
+      },
+      {
+        "name": "#LIZAonTWBA",
+        "url": "http://twitter.com/search?q=%23LIZAonTWBA",
+        "promoted_content": None,
+        "query": "%23LIZAonTWBA",
+        "tweet_volume": 68066
+      },
+      {
+        "name": "#nldebat",
+        "url": "http://twitter.com/search?q=%23nldebat",
+        "promoted_content": None,
+        "query": "%23nldebat",
+        "tweet_volume": None
+      },
+      {
+        "name": "#ConselhosDeUmTrouxa",
+        "url": "http://twitter.com/search?q=%23ConselhosDeUmTrouxa",
+        "promoted_content": None,
+        "query": "%23ConselhosDeUmTrouxa",
+        "tweet_volume": 11419
+      },
+      {
+        "name": "#PBBKiligOverload",
+        "url": "http://twitter.com/search?q=%23PBBKiligOverload",
+        "promoted_content": None,
+        "query": "%23PBBKiligOverload",
+        "tweet_volume": 70766
+      },
+      {
+        "name": "#MiMejorPiropoParaTi",
+        "url": "http://twitter.com/search?q=%23MiMejorPiropoParaTi",
+        "promoted_content": None,
+        "query": "%23MiMejorPiropoParaTi",
+        "tweet_volume": None
+      },
+      {
+        "name": "#8Feb",
+        "url": "http://twitter.com/search?q=%238Feb",
+        "promoted_content": None,
+        "query": "%238Feb",
+        "tweet_volume": None
+      },      
+      {
+        "name": "#LoveBeyondFlags",
+        "url": "http://twitter.com/search?q=%23LoveBeyondFlags",
+        "promoted_content": None,
+        "query": "%23LoveBeyondFlags",
+        "tweet_volume": None
+      },
+      {
+        "name": "#MSWL",
+        "url": "http://twitter.com/search?q=%23MSWL",
+        "promoted_content": None,
+        "query": "%23MSWL",
+        "tweet_volume": None
+      },
+      {
+        "name": "#SoMeArrependoDe",
+        "url": "http://twitter.com/search?q=%23SoMeArrependoDe",
+        "promoted_content": None,
+        "query": "%23SoMeArrependoDe",
+        "tweet_volume": None
+      },
+    ],
+    "as_of": "2017-02-08T16:18:18Z",
+    "created_at": "2017-02-08T16:10:33Z",
+    "locations": [
+      {
+        "name": "Worldwide",
+        "woeid": 1
+      }
+    ]
+  }
+]
 class MockTwitter:
     def __init__(self):
         self.home_timeline = 15
         self.user_list_size = 100
         self.list_member_fail = False
-        self.backed_off = True
+        self.did_not_back_off = False
         self.create_list_calls = 15
         self.create_friends = 15
         self.user_suggestions = 15
@@ -1440,13 +1747,16 @@ class MockTwitter:
         self.friends_ids = 15
         self.followers_list = 15
         self.friends_list = 15
+        self.trends = 15
+        self.place_trends = 15
+        self.closest = 75
 
     def get_followers_ids(self, **kwargs):
         if self.followers_ids==0:
             raise TwythonRateLimitError('501',501)
         self.followers_ids -= 1
         if self.followers_ids<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_fr_ids
 
     def get_friends_ids(self, **kwargs):
@@ -1454,7 +1764,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.friends_ids -= 1
         if self.friends_ids<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_fr_ids
 
     def get_friends_list(self, **kwargs):
@@ -1462,7 +1772,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.friends_list -= 1
         if self.friends_list<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fr_list
 
     def get_followers_list(self, **kwargs):
@@ -1470,7 +1780,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.followers_list -= 1
         if self.followers_list<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fr_list
 
     def get_home_timeline(self, **kwargs):
@@ -1478,7 +1788,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.home_timeline -= 1
         if self.home_timeline<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_tweets
 
     def create_list_members(self, **kwargs):
@@ -1493,14 +1803,14 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.create_list_calls -= 1
         if self.create_list_calls<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_list
 
     def create_friendship(self, **kwargs):
         if self.create_friends==0:
             raise TwythonRateLimitError('501',501)
         if self.create_friends<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         self.create_friends -= 1
 
     def get_user_suggestions(self, **kwargs):
@@ -1508,7 +1818,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.user_suggestions -= 1
         if self.user_suggestions<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_slugs
 
     def verify_credentials(self, **kwargs):
@@ -1516,7 +1826,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.credentials -= 1
         if self.credentials<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_creds
 
     def get_user_suggestions_by_slug(self, **kwargs):
@@ -1524,7 +1834,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.user_suggestions_by_slug -= 1
         if self.user_suggestions_by_slug<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         throw = random.uniform(0.0,1.0)<0.3
         if throw:
             raise TwythonError('not found',404)
@@ -1535,7 +1845,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.user_timeline -= 1
         if self.user_timeline<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_tweets
 
     def get_list_statuses(self, **kwargs):
@@ -1543,7 +1853,7 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.list_statuses -= 1
         if self.list_statuses<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_tweets
 
     def lookup_user(self, **kwargs):
@@ -1551,10 +1861,34 @@ class MockTwitter:
             raise TwythonRateLimitError('501',501)
         self.lookup -= 1
         if self.lookup<0:
-            self.backed_off=False
+            self.did_not_back_off=True
         return fake_tweets
     def add_list_member(self, **kwargs):
-        return []
+        return
+
+    def get_available_trends(self):
+      if self.trends == 0:
+        raise TwythonRateLimitError('501', 501)
+      self.trends-=1
+      if self.trends < 0:
+        self.did_not_back_off = True
+      return fake_trends_locations
+
+    def get_place_trends(self,**kwargs):
+      if self.place_trends == 0:
+        raise TwythonRateLimitError('501', 501)
+      self.place_trends -= 1
+      if self.place_trends < 0:
+        self.did_not_back_off = True
+      return fake_trends
+
+    def get_closest_trends(self,**kwargs):
+      if self.closest == 0:
+        raise TwythonRateLimitError('501', 501)
+      self.closest -= 1
+      if self.closest < 0:
+        self.did_not_back_off = True
+      return fake_trends
 
     def passed(self):
         return len(self.get_failures()) == 0
@@ -1562,3 +1896,37 @@ class MockTwitter:
     def get_failures(self):
         attr = self.__dict__
         return [k for k in attr if (isinstance(attr[k], int) and attr[k] < 0) or attr[k] == True]
+
+class Mock_Stream:
+  def __init__(self,streamer):
+    self.streamer=streamer
+
+  def filter(self,**kwargs):
+    fail = random.uniform(0.0,1.0)<0.1
+    if fail:
+      self.streamer.on_error(123,[])
+    else:
+      self.streamer.on_success(fake_tweets)
+
+
+class Mock_Twitter_Stream:
+  def __init__(self,*args):
+    self._callback = None
+    self._error_handler=None
+    self.statuses=Mock_Stream(self)
+
+  def set_callback(self, callback):
+    self._callback = callback
+
+  def set_error_handler(self, handler):
+    self._error_handler = handler
+
+  def on_success(self, data):
+    if 'text' in data:
+      self._callback(data)
+
+  def on_error(self, status_code, data):
+    self._error_handler()
+
+  def disconnect(self):
+    pass

@@ -8,6 +8,7 @@ import datetime
 import copy
 
 
+
 class Minion(threading.Thread):
     def __init__(self, task, lock, scheduler):
         threading.Thread.__init__(self)
@@ -83,16 +84,18 @@ class Streamion(Minion):
 
     def run(self):
         print "Starting streamer"
+        import constants as c
+        from test_struct import Mock_Twitter_Stream
         self._streamer = TwitterStreamer(self._creds['app_key'], self._creds['app_secret']
-                                         , self._creds['oauth_token'], self._creds['oauth_token_secret'])
+                                         , self._creds['oauth_token'], self._creds['oauth_token_secret']) if not c.TESTING else Mock_Twitter_Stream(self._creds)
         self._twitter = TwitterHandler(self._creds, id=self._creds['id'])
         self._streamer.set_callback(self._task['store'])
         # if an error occurs e.g. no internet or twitter is inaccessible terminate thread
         # HAS NEVER BEEN TESTED WORKS IN THEORY BUT MIGHT BE BUGGY
-        self._streamer.set_error_handler(self.interrupt())
+        self._streamer.set_error_handler(self.interrupt)
         # a handy functional expression to check if the trends data is data or list of locations for which we want trends
         contains_locations = lambda x: isinstance(x, list) and any([('location' in i or 'woeid' in i) for i in x])
-        trends = self._task['data'] if not contains_locations(self._task['data']) \
+        trends = self._task['data'] if contains_locations(self._task['data']) \
             else self._twitter.get_trends(self._task['data'])
         follow = []
         while (self._is_running):
@@ -107,4 +110,4 @@ class Streamion(Minion):
             if not trends:
                 print "Requesting trends"
                 trends = self._twitter.get_trends(self._task['data'])
-                # self._streamer.disconnect()
+        self._streamer.disconnect()

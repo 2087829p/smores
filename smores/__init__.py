@@ -135,8 +135,8 @@ def model_comparison():
     # db2.set_db_context(strm)
     f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE,lambda x:x,None)
     f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE,lambda x:x,None)
-    #c.TESTING=True
-    sh = s.Scheduler(use='model', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=True)
+    c.TESTING=True
+    sh = s.Scheduler(use='both', site='twitter', storage=lambda x:x,plugins=[f1,f2],multicore=False)
     sh.start()
     import time
     t = 3600
@@ -166,6 +166,6 @@ from utils import *
 
 
 #politeness_test()
-#model_comparison()
-explore_only()
+model_comparison()
+#explore_only()
 # crawl(use='model')
