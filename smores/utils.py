@@ -51,11 +51,15 @@ class KMeanClassifier:
 
 
 class NeuralNetwork:
-    def __init__(self, num_inputs, num_outputs):
+    def __init__(self, num_inputs, num_outputs,mlp=False):
         self._size_in = num_inputs
         self._size_out = num_outputs
-        self._w = []
-        self._setup = False
+        if not mlp:
+            self._w = [self.__gen_layer__(num_inputs,num_outputs)]
+            self._setup = True
+        else:
+            self._setup = False
+            self._w = []
 
     def __gen_layer__(self, in_size, out_size):
         return 2 * np.random.random((in_size, out_size)) - 1
@@ -64,7 +68,7 @@ class NeuralNetwork:
         if not self._w:
             self._w.append(self.__gen_layer__(self._size_in, num_neurons))
         else:
-            self._w.append(self.__gen_layer__(len(self._w[-1]), num_neurons))
+            self._w.append(self.__gen_layer__(self._w[-1].shape[1], num_neurons))
 
     def __sigmoid__(self, x, deriv=False):
         if (deriv == True):
@@ -78,28 +82,30 @@ class NeuralNetwork:
         elif not self._setup:
             self._w.append(self.__gen_layer__(self._w[-1].shape[1], self._size_out))
             self._setup = True
-        for i in range(epochs):
+        for i in xrange(epochs):
             # propagate forward
-            lo = X
+            l0 = X
             # lo = self.__sigmoid__(np.dot(lo,self._w[0]))
-            l1 = [lo]
+            l1 = [l0]
             for l in range(len(self._w)):
-                lo = self.__sigmoid__(np.dot(lo, self._w[l]))
-                l1.append(lo)
-            err = y - lo
-            delta = err * self.__sigmoid__(lo, True)
+                l0 = self.__sigmoid__(np.dot(l0, self._w[l]))
+                l1.append(l0)
+            err = y - l0
+            delta = err * self.__sigmoid__(l0, True)
             if len(self._w) > 1:
-                self._w[-1] += lo.T.dot(delta)
-                for j in range(len(self._w) - 1, 0, -1):
-                    l_err = delta.dot(self._w[j].T)
+                self._w[-1] += l0.T.dot(delta)
+                for j in xrange(len(self._w) - 2, 0, -1):
+                    l_err = delta.dot(self._w[j+1].T)
                     l_delta = l_err * self.__sigmoid__(l1[j], deriv=True)
                     self._w[j] += l1[j].T.dot(l_delta)
+                    delta = l_delta
             else:
-                self._w[-1] += np.dot(lo.T, delta)
+                self._w[-1] += np.dot(l0.T, delta)
 
     def predict(self, X):
         lo = X
-        for l in range(len(self._w)):
+        print "Xx="+str(X)
+        for l in xrange(len(self._w)):
             lo = self.__sigmoid__(np.dot(lo, self._w[l]))
         return lo
 

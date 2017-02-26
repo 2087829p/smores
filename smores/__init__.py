@@ -3,6 +3,7 @@ import scheduler as s
 import constants as c
 import sys
 from storage import Filter
+from utils import *
 
 scheduler = None
 
@@ -156,8 +157,8 @@ def model_comparison():
     # db2.set_db_context(strm)
     f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE, lambda x: x, None)
     f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE, lambda x: x, None)
-    # c.TESTING=True
-    sh = s.Scheduler(use='stream', site='twitter', storage=lambda x: x, plugins=[f1, f2], multicore=True)
+    #c.TESTING=True
+    sh = s.Scheduler(use='harvester', site='twitter', storage=lambda x: x, plugins=[f1, f2], multicore=True)
     sh.start()
     from time import gmtime, strftime
     print "Test started at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
@@ -185,11 +186,31 @@ def model_comparison():
     #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='streaming')
     sys.exit(0)
 
+def run_hybrid():
+    f1 = StatsFilter(TWITTER_PLUGIN_SERVICE, lambda x: x, None)
+    c.TESTING = True
+    sh = s.Scheduler(use='hybrid', site='twitter', storage=lambda x: x, plugins=[f1],
+                     multicore=False,classifier=PERCEPTRON_CLASSIFIER)
+    sh.start()
+    from time import gmtime, strftime
+    print "Test started at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    import time
+    t = 3600
+    try:
+        while t > 0:
+            time.sleep(1)
+            t -= 1
+    except KeyboardInterrupt:
+        pass
+    sh.terminate()
+    print "Results"
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\n" % (
+        f1.total_tweets, len(f1.unique_tweets), len(f1.unique_users), f1.lost_data)
+    sys.exit(0)
 
-import numpy as np
-from utils import *
 
 # politeness_test()
 model_comparison()
 #explore_only()
+#run_hybrid()
 # crawl(use='model')

@@ -6,7 +6,7 @@ __author__ = 'tony petrov'
 import datetime
 
 import twython
-from twython import TwythonStreamer,TwythonError
+from twython import TwythonStreamer, TwythonError
 import random
 import string
 import constants
@@ -100,68 +100,70 @@ class TwitterHandler:
             return []
         # check if we have any lists and if the last list has enough space to fit any of the candidates
         if len(lists) > 0 and lists[-1]['count'] < max_list_size:
-                # determine the max amount of users the list can take have no more than the remaining capacity of the list
-                take = min(max_list_size - lists[-1]['count'], len(candidates))
-                # determine whether the candidates should go to the twitter lists or bulk lists
-                if is_twitter_list:
-                    if self._list_attempts <= 0:
-                        lists[-1]['count'] = self._twitter.get_specific_list(list_id=lists[-1]['id'])['member_count']
-                        return candidates
+            # determine the max amount of users the list can take have no more than the remaining capacity of the list
+            take = min(max_list_size - lists[-1]['count'], len(candidates))
+            # determine whether the candidates should go to the twitter lists or bulk lists
+            if is_twitter_list:
+                if self._list_attempts <= 0:
+                    lists[-1]['count'] = self._twitter.get_specific_list(list_id=lists[-1]['id'])['member_count']
+                    return candidates
+                try:
+                    take = min(constants.TWITTER_ADD_TO_LIST_LIMIT, take)
+                    # use the api to add the new users to the list
+                    self._list_attempts -= 1
+                    self._twitter.create_list_members(list_id=lists[-1]['id'],
+                                                      user_id=','.join(map(lambda x: str(x), candidates[:take])))
+                    # update the size of the list
+                    lists[-1]['count'] = lists[-1]['count'] + take
+                except Exception as e:
+                    print "Users could not be added to list in bulk cause: %s" % e.message
+                    # twitter's bulk adding is bugged
+                    print "Trying to add users 1 by 1"
                     try:
-                        take = min(constants.TWITTER_ADD_TO_LIST_LIMIT, take)
-                        # use the api to add the new users to the list
-                        self._list_attempts -= 1
-                        self._twitter.create_list_members(list_id=lists[-1]['id'], user_id=','.join(map(lambda x:str(x),candidates[:take])))
-                        # update the size of the list
-                        lists[-1]['count'] = lists[-1]['count'] + take
+                        self._twitter.add_list_member(list_id=lists[-1]['id'], user_id=candidates[0])
+                        lists[-1]['count'] = lists[-1]['count'] + 1
                     except Exception as e:
-                        print "Users could not be added to list in bulk cause: %s" % e.message
-                        # twitter's bulk adding is bugged
-                        print "Trying to add users 1 by 1"
-                        try:
-                            self._twitter.add_list_member(list_id=lists[-1]['id'], user_id=candidates[0])
-                            lists[-1]['count'] = lists[-1]['count'] + 1
-                        except Exception as e:
-                            print "Adding users to list failed cause: %s" % e.message
-                            self._list_attempts = 0
-                        # error occurred can not put anything into the list return the remaining number of candidates
-                        return candidates
-                else:
-                    # put users into the last bulk list
-                    lists[-1]['ids'] += candidates[:take]
-                    # update the bulk list's size
-                    lists[-1]['count'] = len(lists[-1]['ids'])
-                # remove the users we just added
-                candidates = candidates[take:]
-                # recurse and attempt to fit in more users
-                return self.fit_to_lists(candidates, lists, max_list_num, max_list_size, is_twitter_list)
+                        print "Adding users to list failed cause: %s" % e.message
+                        self._list_attempts = 0
+                    # error occurred can not put anything into the list return the remaining number of candidates
+                    return candidates
+            else:
+                # put users into the last bulk list
+                lists[-1]['ids'] += candidates[:take]
+                # update the bulk list's size
+                lists[-1]['count'] = len(lists[-1]['ids'])
+            # remove the users we just added
+            candidates = candidates[take:]
+            # recurse and attempt to fit in more users
+            return self.fit_to_lists(candidates, lists, max_list_num, max_list_size, is_twitter_list)
         # either no free list was found or no lists exist
         else:
-                if is_twitter_list:
-                    try:
-                # create a new twitter list
-                        list_id = self._twitter.create_list(name=''.join(random.choice(string.lowercase) for i in range(12)),
-                                                    mode='public')['id']
-                # add it to the crawler data base
-                        lists.append({'id': list_id, 'count': 0})
-                        if self._scheduler:
-                            self._scheduler.__put_data__(constants.TASK_FETCH_LISTS, {'id': list_id, 'count': 0})
-                # recurse and try to fill the new list
-                        return self.fit_to_lists(candidates, lists, max_list_num, max_list_size, is_twitter_list)
-                    except Exception as e:
-                        print "Twitter List could not be created " + e.message
-                else:
-            # calculate how many users we can take into a bulk list
-                    take = min(max_list_size, len(candidates))
-                    new_list = {'ids': candidates[:take], 'count': take}
-            # create a new bulk list for our users and put them in it
-                    lists.append(new_list)
+            if is_twitter_list:
+                try:
+                    # create a new twitter list
+                    list_id = \
+                    self._twitter.create_list(name=''.join(random.choice(string.lowercase) for i in range(12)),
+                                              mode='public')['id']
+                    # add it to the crawler data base
+                    lists.append({'id': list_id, 'count': 0})
                     if self._scheduler:
-                        self._scheduler.__put_data__(constants.TASK_BULK_RETRIEVE, new_list)
-            # remove the users we just added
-                    candidates = candidates[take:]
-            # recurse and attempt to fit them into the same or new list
+                        self._scheduler.__put_data__(constants.TASK_FETCH_LISTS, {'id': list_id, 'count': 0})
+                        # recurse and try to fill the new list
                     return self.fit_to_lists(candidates, lists, max_list_num, max_list_size, is_twitter_list)
+                except Exception as e:
+                    print "Twitter List could not be created " + e.message
+            else:
+                # calculate how many users we can take into a bulk list
+                take = min(max_list_size, len(candidates))
+                new_list = {'ids': candidates[:take], 'count': take}
+                # create a new bulk list for our users and put them in it
+                lists.append(new_list)
+                if self._scheduler:
+                    self._scheduler.__put_data__(constants.TASK_BULK_RETRIEVE, new_list)
+                    # remove the users we just added
+                candidates = candidates[take:]
+                # recurse and attempt to fit them into the same or new list
+                return self.fit_to_lists(candidates, lists, max_list_num, max_list_size, is_twitter_list)
         # return the remaining users which we could not add to any list
         return candidates
 
@@ -175,7 +177,8 @@ class TwitterHandler:
                 for i in xrange(take):
                     try:
                         self._twitter.create_friendship(user_id=candidates[i], follow=True)
-                        time.sleep(random.randint(1,15))  #sleep for random amount of seconds to avoid twitter thinking that we're automated
+                        time.sleep(random.randint(1,
+                                                  15))  # sleep for random amount of seconds to avoid twitter thinking that we're automated
                     except:
                         print "Could not follow user " + str(candidates[i])
                         return candidates
@@ -207,7 +210,7 @@ class TwitterHandler:
                 users += [x["id"] for x in user_filter(self._twitter.get_followers_list(user_id=id)["users"])]
                 rqs_remaining[1] -= 1
         except TwythonError as e:
-            if e.error_code==404:
+            if e.error_code == 404:
                 print "User " + str(id) + "could not be found"
             else:
                 print e.message
@@ -220,12 +223,12 @@ class TwitterHandler:
     # attempts to find new accounts to follow
     def explore(self, args):
         """Find new users to follow"""
-        remaining = args.get('remaining',[])
+        remaining = args.get('remaining', [])
         candidates = []
         self._list_attempts = 15
-        user_lists = args.get('user_lists',[])
-        bulk_lists = args.get('bulk_lists',[])
-        users = args.get('total_followed',[])
+        user_lists = args.get('user_lists', [])
+        bulk_lists = args.get('bulk_lists', [])
+        users = args.get('total_followed', [])
         total_followed = copy.deepcopy(users)
         try:
             # get our suggested categories
@@ -235,13 +238,13 @@ class TwitterHandler:
             # get the people who we are following
             following = self._twitter.get_friends_ids(screen_name=data['screen_name'])
             print "%d users followed online" % len(following['ids'])
-            total_followed += following['ids'] +([i for sl in bulk_lists for i in sl['ids']] if bulk_lists else [])
-            print "%d total users followed offline" % (len(total_followed)-len(following['ids']))
+            total_followed += following['ids'] + ([i for sl in bulk_lists for i in sl['ids']] if bulk_lists else [])
+            print "%d total users followed offline" % (len(total_followed) - len(following['ids']))
             # get the total number of twitter users that we follow including bulk list users and twitter list users as well as non followed users
-            ff_requests = [14, 15]  #friends_ids and followers_ids requests remaining
+            ff_requests = [14, 15]  # friends_ids and followers_ids requests remaining
             for s in [random.choice(slugs) for i in xrange(15)]:
                 # get some suggested users in the given category
-                new_users=list()
+                new_users = list()
                 try:
                     new_users = self._twitter.get_user_suggestions_by_slug(slug=s['slug'])['users']
                 except TwythonError as e:
@@ -266,17 +269,17 @@ class TwitterHandler:
             candidates = self.fit_to_lists(candidates, user_lists,
                                            constants.TWITTER_MAX_NUMBER_OF_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_MAX_LIST_SIZE, True)
-            print str(candidates_total-len(candidates))+" users added to twitter lists"
-            candidates_total=len(candidates)
+            print str(candidates_total - len(candidates)) + " users added to twitter lists"
+            candidates_total = len(candidates)
             # try to fit some users into the bulk lists
             candidates = self.fit_to_lists(candidates, bulk_lists,
                                            constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * constants.TWITTER_CYCLES_PER_HOUR,
                                            constants.TWITTER_BULK_LIST_SIZE, False)
-            print str(candidates_total-len(candidates))+" users added to bulk lists"
+            print str(candidates_total - len(candidates)) + " users added to bulk lists"
             candidates_total = len(candidates)
             self.__follow_users__(candidates, users, len(following))
-            print "%d users added to offline following" % (candidates_total-len(candidates))
-            print str(len(candidates))+" users left unallocated"
+            print "%d users added to offline following" % (candidates_total - len(candidates))
+            print str(len(candidates)) + " users left unallocated"
         except Exception as e:
             print "Error while exploring " + e.message
             if candidates:
@@ -311,7 +314,7 @@ class TwitterHandler:
                 current_id = temp_data[-1]["id"]
                 # set task id to the top id since next time we will request the up to date timeline
                 task_data["id"] = temp_data[0]["id"]
-            elif task_data.get('since',False):
+            elif task_data.get('since', False):
                 # requesting only new tweets
                 # sleep for 1 min to allow the timeline to refresh
                 time.sleep(update_fq)
@@ -328,13 +331,13 @@ class TwitterHandler:
             max_attempts -= 1
         # tell worker that next time we want the new tweets only
         task_data['since'] = True
-        st.save_data(task_data,constants.TWITTER_WALL_STORAGE)
+        st.save_data(task_data, constants.TWITTER_WALL_STORAGE)
         return data
 
     # fetches the specified user's timeline
     def fetch_user_timeline(self, user):
         # count is set to 200 since that's the max that twitter would actually return despite the docs saying 3200
-        return self._twitter.get_user_timeline(user_id=user,count=200)  # user = 900 , app = 1500
+        return self._twitter.get_user_timeline(user_id=user, count=200)  # user = 900 , app = 1500
 
     # fetches the tweets in the specified list of _users
     def fetch_list_tweets(self, list):
@@ -343,59 +346,64 @@ class TwitterHandler:
     # fetches the latest tweets of up to 100 _users
     # as specified in the user_ids list
     def fetch_bulk_tweets(self, user_ids):
-        data = self._twitter.lookup_user(user_id=','.join(map(lambda x:str(x),user_ids['ids'])))  # user = 900, app = 300
+        data = self._twitter.lookup_user(user_id=','.join(map(lambda x: str(x), user_ids['ids'])),
+                                         include_entities=True)  # user = 900, app = 300
         # convert data from user info to tweet
         ret_data = []
         for i in data:
             if 'status' in i:
-                i['user'] ={'id':i['id']}
-                ret_data.append(i)
+                tweet = i['status']
+                i.pop('status')
+                tweet['user'] = i
+                ret_data.append(tweet)
         return ret_data
 
     def search(self, q_params):
         max_attempts = 180
         query_max_length = 500
         data = []
+        keywords = q_params['keywords']
+        keywords.reverse()
+        while max_attempts > 0 and len(keywords) > 0:
+            query = keywords.pop()
+            if len(keywords) > 1:
+                current_length = len(query)
+                while current_length < query_max_length:
+                    op = ' OR '
+                    if current_length + len(op) + len(keywords[-1]) < query_max_length:
+                        query += op + keywords.pop()
+                        current_length = len(query)
+                    else:
+                        break
+            # keywords = ' OR '.join(keywords)
+            max_attempts -= 1
         try:
-            keywords = q_params['keywords']
-            keywords.reverse()
-            while max_attempts > 0 and len(keywords)>0:
-                query = keywords[0]
-                if len(keywords) > 1:
-                    current_length = 0
-                    while current_length < query_max_length:
-                        if current_length + 4 + len(keywords[0]) < query_max_length:
-                            query +=' OR ' + keywords.pop()
-                            current_length = len(query)
-                        else:
-                            break
-                #keywords = ' OR '.join(keywords)
-                max_attempts -= 1
-                data += self._twitter.search(q=query,count=100,include_entities=True).get('statuses',[])
-        except:
-            print "Search failed"
+            data += self._twitter.search(q=query, count=100, include_entities=True).get('statuses', [])
+        except Exception as e:
+            print query
+            print "Search failed cause: %s" % e.message
         return data
 
     def get_trends(self, args):
         trends = []
-        trend_filter = lambda data:map(lambda x:x['name'],data)
-        max_attempts = args.get('attempts',constants.MAX_TWITTER_TRENDS_REQUESTS)
+        trend_filter = lambda data: map(lambda x: x['name'], data)
+        max_attempts = args.get('attempts', constants.MAX_TWITTER_TRENDS_REQUESTS)
         if max_attempts == 0:
             return []
         if 'woeid' in args:
-            # search for trends at a location with a specific where on earth id
+            # search_queries for trends at a location with a specific where on earth id
             try:
                 # go through left over woeids
                 for w in args['woeid'][:max_attempts]:
                     tmp = self._twitter.get_place_trends(id=w)
                     for t in tmp:
                         # filter each group of trends
-                        trends+=trend_filter(t['trends'])
+                        trends += trend_filter(t['trends'])
                     max_attempts -= 1
             except:
                 return trends
         elif 'lat' in args and 'long' in args:
-            # search for trends in a given geo box based on lat and long
+            # search_queries for trends in a given geo box based on lat and long
             try:
                 tmp = self._twitter.get_closest_trends(lat=args['lat'], long=args['long'])
                 for t in tmp:
@@ -416,7 +424,7 @@ class TwitterHandler:
             # get woeids
             locations = map(lambda x: x['woeid'], locations)
             # get trends
-            trends += self.get_trends(dict(woeid=locations,attempts=max_attempts))
+            trends += self.get_trends(dict(woeid=locations, attempts=max_attempts))
         return trends
 
 

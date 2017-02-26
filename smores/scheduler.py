@@ -1,6 +1,5 @@
-__author__ = 'tony petrov'
-
 import datetime as dt
+import numpy as np
 import storage as st
 from heapq import *
 import minion as m
@@ -12,6 +11,7 @@ from math import *
 import Queue
 import time
 from collections import deque
+__author__ = 'tony petrov'
 
 # task={}
 # 'site':'twitter,instagram,blah blah'          - site from which data will be retrieved
@@ -39,10 +39,10 @@ class RankingFilter(st.Filter):
         self._topic_classifier = KMeanClassifier()
         if not self._classifier:
             if classifier == PERCEPTRON_CLASSIFIER:
-                self._classifier = NeuralNetwork(6, 1)
+                self._classifier = NeuralNetwork(5, 1)
             elif classifier == DEEP_NEURAL_NETWORK_CLASSIFIER:
-                self._classifier = NeuralNetwork(6, 1)
-                for i in range(3):
+                self._classifier = NeuralNetwork(5, 1, True)
+                for _ in range(3):
                     self._classifier.add_hidden_layer(50)
             elif classifier == K_MEANS_CLASSIFIER:
                 self._classifier = KMeanClassifier()
@@ -52,8 +52,11 @@ class RankingFilter(st.Filter):
         if isinstance(self._classifier, NeuralNetwork):
             for k in self._influential_users:
                 u = self._influential_users[k]
-                influential_users.append((self._classifier.predict(
-                    [u['tslp'], u['followers'], u['friends'], u['total_posts'], u['mentions'], u['post_frq']]), k))
+                # fit tslp in window and then cast the window size in range 0 to 1
+                # then increase the weight of smaller tslp's since shorter time means more active user!
+                u['tslp'] = 1.0 - (np.clip(fit_in_range(u['tslp'],0.0,RUNNING_CYCLE),0,1))
+                influential_users.append((float(self._classifier.predict(
+                    [u['tslp'], u['followers'], u['friends'],  u['mentions'], u['post_frq']])), k))
                 # = [(self._classifier.predict(np.array(self._influential_users[u].values())), u) for u in
                 #         self._influential_users.keys()]
         else:
@@ -80,12 +83,12 @@ class RankingFilter(st.Filter):
                 u = self._training_users[s]
                 if isinstance(self._classifier, NeuralNetwork):
                     self._classifier.train(
-                        np.array(u['tslp'], u['followers'], u['friends'], u['total_posts'], u['mentions'],
-                                 u['post_frq']),
-                        np.array([1.0 if s in self._influential_users else 0.0]))
+                        [u['tslp'], u['followers'], u['friends'], u['mentions'],
+                                 u['post_frq']],
+                        [1.0 if s in self._influential_users else 0.0],100)
                 else:
                     self._classifier.train(u['series'], 1.0 if s in self._influential_users else 0.0)
-        self._training_users = {s: self._influential_users[s] for s in samples}
+        self._training_users = {s[1]: self._influential_users[s[1]] for s in samples}
         self._hot_topics = {}
         self._last_updated = now
         self._influential_users = {}
@@ -94,15 +97,17 @@ class RankingFilter(st.Filter):
     def process(self, data):
         now = time.time()
         cycle = int(now - self._last_updated)
-        if now > self._last_updated + RANK_RESET_TIME:
+        if now > self._last_updated + 15:#RANK_RESET_TIME:
             return self.__train_and_rank__(now)
+        if isinstance(data,dict):   # can't iterate over a dict so cast it to a list
+            data = [data]
         for t in data:
-            user = self._influential_users.get(t['user']["id"],
+            user = self._influential_users.setdefault(t['user']["id"],
                                                dict(tslp=time.time(), followers=0, friends=0, total_posts=0, mentions=0,
                                                     post_frq=0, series=[0 for i in range(RUNNING_CYCLE)]))
             created = get_tweet_timestamp(t)
             scaling_factor = 19
-            user["tslp"] = created - user.get("tslp", 0)
+            user["tslp"] = created - user.get('tslp',time.time())
             user["followers"] = fit_in_range(0, scaling_factor, log10(
                 t["user"]["followers_count"])) if "user" in t and "followers_count" in t["user"] else 0
             user["friends"] = fit_in_range(0, scaling_factor,
@@ -110,14 +115,16 @@ class RankingFilter(st.Filter):
                 "user"] else 0
             user["total_posts"] += 1
             user["post_frq"] = user["total_posts"] / float(RUNNING_CYCLE)
-            user['series'][min(cycle, int(created - now))] += 1.0
+            ix = min(cycle, int(now - created))
+            print ix
+            user['series'][ix] += 1.0
             entities = t['entities']
             if "hashtags" in entities:
                 for h in entities["hashtags"]:
                     tag = h["text"]
-                    topic = self._hot_topics.get(tag, dict(series=[0.0 for i in range(RUNNING_CYCLE)],
+                    topic = self._hot_topics.setdefault(tag, dict(series=[0.0 for i in range(RUNNING_CYCLE)],
                                                            count=0))  # dict(count=0,likes=0,rts=0))
-                    topic['series'][min(cycle, int(created - now))] += 1.0
+                    topic['series'][min(cycle, int(now - created))] += 1.0
                     # user['tags'] = user.setdefault('tags',set()).add(tag)
                     topic["count"] += 1
                     # topic["likes"] += t["favorite_count"]
@@ -125,7 +132,7 @@ class RankingFilter(st.Filter):
                     # self._total_tags += 1
             if 'user_mentions' in entities:
                 for m in entities['user_mentions']:
-                    u = self._influential_users.get(m["id"], {})
+                    u = self._influential_users.setdefault(m["id"], {})
                     u['mentions'] += 1
         return None
 
@@ -135,14 +142,33 @@ class Scheduler:
         self._minions = []
         self._sites = kwargs.get('sites', ['twitter'])
         self._plugins = kwargs.get('plugins', [])
+        self._use = kwargs.get('use', TWITTER_CYCLE_HARVESTER)
+        self._classifier = kwargs.get('classifier',PERCEPTRON_CLASSIFIER)
         import multiprocessing
         cores = multiprocessing.cpu_count()
         self._thread_num = max(1, (cores - len(self._plugins)) / 2) if kwargs.get('multicore', False) else 1
         self._lock = threading.Lock()
+        self._handlers = []
+        login = filter(lambda x: x if x['site'] == 'twitter' else None,st.read_login(TWITTER_CREDENTIALS))
+        proxies = st.read_login(PROXY_LOCATION)
+
+        # TODO ADD SOME PROXY CHECK IF ALIVE FUNCTION
+        ix = 0
+        for l in login:
+            if l['site'] == 'twitter':
+                if len(proxies) > 0:
+                    proxy = {'proxies': proxies.pop()}
+                    t = handlers.TwitterHandler(l, False, id=ix, client_args=proxy, scheduler=self)
+                    self._handlers.append(t)
+                    ix += 1
+                else:
+                    t = handlers.TwitterHandler(l, False, id=ix, scheduler=self)
+                    self._handlers.append(t)
+                    ix += 1
+                    break  # we ran out of proxies so just exit
         self._trends = kwargs.get('trends', {})
         if not self._trends or contains_locations(self._trends):
             self._trends = self.__get_top_n_trends__(-1)
-        self._handlers = []
         if c.TESTING:
             self._predefined_store = False
             self._store = lambda x: x
@@ -158,7 +184,6 @@ class Scheduler:
                 self._store = self._storage.write
                 self._predefined_store = False
             self._thread_num += 1 if kwargs.get('multicore', False) else 0
-        self._use = kwargs.get('use', TWITTER_CYCLE_HARVESTER)
         self._target_queue = dict()
         self._target_queue['tumblr_tags'] = kwargs.get('tumblr_tags', [])
         self._target_queue['fb_users'] = kwargs.get('fb_users', [])
@@ -192,7 +217,7 @@ class Scheduler:
             self.__setup_streamer__(self._trends)
             self.__setup_minions__()
         elif self._use == TWITTER_HYBRID_MODEL:
-            self._plugins = [RankingFilter(TWITTER_PLUGIN_SERVICE, self.__update_future_queue__, [])]
+            self._plugins.append(RankingFilter(TWITTER_PLUGIN_SERVICE, self.__update_future_queue__, [],self._classifier))
             self.__setup_streamer__(self._trends)
             self.__setup_minions__()
         else:
@@ -224,7 +249,7 @@ class Scheduler:
     def __setup_minions__(self):
         self._tasks = self.__prepare_work__()
         unique_ops = len(set([t[1]['op'] for t in self._tasks.queue]))
-        if self._use == TWITTER_HYBRID_MODEL or self._use == TWITTER_STREAMING_HARVESTER_NON_HYBRID:
+        if (self._use == TWITTER_HYBRID_MODEL or self._use == TWITTER_STREAMING_HARVESTER_NON_HYBRID) and not c.TESTING:
             #if we are using both minions and streaming add an extra minion
             # this is done to avoid stalling due to too low thread count and getting stuck in slow ops
             self._thread_num += 1
@@ -247,23 +272,8 @@ class Scheduler:
 
         self._minions.append(m.Streamion(login, t, lock=self._lock, scheduler=self))
 
-    def __prepare_twitter__(self, tasks, login, proxies):
+    def __prepare_twitter__(self, tasks):
         """Generates a queue of tasks for the Twitter cycle harvester model"""
-        # TODO ADD SOME PROXY CHECK IF ALIVE FUNCTION
-        ix = 0
-        for l in login:
-            if l['site'] == 'twitter':
-                if len(proxies) > 0:
-                    proxy = {'proxies': proxies.pop()}
-                    t = handlers.TwitterHandler(l, False, id=ix, client_args=proxy, scheduler=self)
-                    self._handlers.append(t)
-                    ix += 1
-                else:
-                    t = handlers.TwitterHandler(l, False, id=ix, scheduler=self)
-                    self._handlers.append(t)
-                    ix += 1
-                    break  # we ran out of proxies so just exit
-        self._timeouts = [[dt.datetime(1970, 1, 1) for j in xrange(TOTAL_TASKS)] for i in xrange(ix)]
         service = TWITTER_PLUGIN_SERVICE if self._use == TWITTER_HYBRID_MODEL else TWITTER_HARVESTER_PLUGIN_SERVICE
         twitter_plugins = [p for p in self._plugins if p._for == service]
         remaining_users = st.load_data(TWITTER_CANDIDATES_STORAGE)
@@ -301,7 +311,7 @@ class Scheduler:
             #                'plugins': twitter_plugins,
             #                'acc_id': t.id}))
             if not c.EXPLORING:
-                tasks.put((0, {'site': 'twitter', 'op': TASK_UPDATE_WALL,
+                tasks.put((10, {'site': 'twitter', 'op': TASK_UPDATE_WALL,
                                'data': timeline, 'fetch': t.fetch_home_timeline,
                                'store': store, 'plugins': twitter_plugins,
                                'acc_id': t.id}))
@@ -316,9 +326,9 @@ class Scheduler:
                 tasks.put((0, {'site': 'twitter', 'op': TASK_FETCH_USER,
                                'data': users[i] if len(users) > i else [], 'fetch': t.fetch_user_timeline,
                                'store': store, 'plugins': twitter_plugins, 'acc_id': t.id}))
-                tasks.put(0, {'site': 'twitter', 'op': TASK_TWITTER_SEARCH,
-                              'data': self.__get_top_n_trends__(-1), 'fetch': t.search,
-                              'store': store, 'plugins': twitter_plugins, 'acc_id': t.id})
+                tasks.put((0, {'site': 'twitter', 'op': TASK_TWITTER_SEARCH,
+                              'data': dict(keywords=self.__get_top_n_trends__(-1)), 'fetch': t.search,
+                              'store': store, 'plugins': twitter_plugins, 'acc_id': t.id}))
         return tasks
 
     def __prepare_tumblr__(self, tasks, login):
@@ -358,10 +368,9 @@ class Scheduler:
     def __prepare_work__(self):
         tasks = Queue.PriorityQueue()
         login = st.read_login(TWITTER_CREDENTIALS)
-        proxies = st.read_login(PROXY_LOCATION)
         for s in self._sites:
             if s == 'twitter':
-                self.__prepare_twitter__(tasks, filter(lambda x: x if x['site'] == 'twitter' else None, login), proxies)
+                self.__prepare_twitter__(tasks)
             if s == 'tumblr':
                 self.__prepare_tumblr__(tasks, filter(lambda x: x if x['site'] == 'tumblr' else None, login))
             if s == 'facebook':
@@ -374,8 +383,8 @@ class Scheduler:
             return
         users = data[1]
         topics = data[0]
-        self._target_queue['users'] = [(users[k], k) for k in users.keys()]
-        self._trends = [(topics[k], k) for k in topics.keys()] if topics else []
+        self._target_queue['users'] = users#[(users[k], k) for k in users.keys()]
+        self._trends = topics #[(topics[k], k) for k in topics.keys()] if topics else []
         # heapify(self._target_queue)
         # heapify(self._trends)
 
@@ -396,7 +405,7 @@ class Scheduler:
                     c.TIME_TO_UPDATE_TRENDS = time.time() + RUNNING_CYCLE
                 if n == -1:
                     return self._trends
-                out =  self._trends[:n]
+                out = self._trends[:n]
                 self._trends = self._trends[n:]
                 return out
             except:
@@ -452,7 +461,8 @@ class Scheduler:
             self._tasks.put((task['timeout'], task))
             with self._lock:
                 self._cycles[task['op']] += 1
-            self.__put_data__(task['op'], task['data'])
+            if task['op'] != TASK_TWITTER_SEARCH:
+                self.__put_data__(task['op'], task['data'])
             print 'after' + str([v[1]['op'] for v in self._tasks.queue])
         if not self._tasks.queue:
             # No data yet so check again in 5 seconds

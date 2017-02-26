@@ -23,7 +23,13 @@ class WordStatsCollector:
         self._words = Counter()
         self._last_update = time.time()
     def get_negative_dictionary(self):
-        return set(w[0] for w in self._words.most_common(self._size))
+        words = self._words.most_common()
+        neg_words = []
+        for i in xrange(len(words)):
+            if words[i][1]*i>0.1:
+                neg_words.append(words[i][0])
+        return neg_words
+        #return set(w[0] for w in self._words.most_common(self._size))
 
 
 class Cluster:
@@ -107,6 +113,8 @@ class Preprocessor(Filter):
 
     def process(self, data):
         using_stopwords = len(self._stopwords) != 0
+        # remove non English tweets
+        data = filter(lambda x:x.get('metadata',{'iso_language_code':'nen'}).get('iso_language_code','nen')=='en',data)
         if using_stopwords:
             return self.__process_using_neg_dict__(data)
         else:
