@@ -1,3 +1,4 @@
+# coding=utf8
 from twython import TwythonError
 from twython import TwythonRateLimitError
 import random
@@ -26,7 +27,18 @@ fake_tweets = [
                 }
             ],
             "hashtags": [
-
+                {'text':'lala',
+                        "indices": [
+                        20,
+                        34
+                    ]
+                },
+                {'text': 'gaga',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 }
             ],
             "user_mentions": [
 
@@ -125,7 +137,18 @@ fake_tweets = [
                 }
             ],
             "hashtags": [
-
+                {'text': 'dada',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 },
+                {'text': 'gaga',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 }
             ],
             "user_mentions": [
 
@@ -2358,6 +2381,18 @@ class MockTwitter:
         self.home_timeline -= 1
         if self.home_timeline < 0:
             self.did_not_back_off = True
+        if random.uniform(0.0,1.0)<0.5:
+            # randomly break the crawler
+            print "Sent broken data"
+            return [{"followers_count":-1,
+                     "friends_count":None,'text':u"ðåçð¶ßå",
+                     'iso_language_code':'en',
+                     'entities':{"hashtags": [
+                    {
+                        "text": u"ðåçð",
+                        "indices": [20,34]
+                    }
+                ],'user_mentions':{'id':15546}}}]
         return fake_tweets
 
     def create_list_members(self, **kwargs):
@@ -2415,6 +2450,21 @@ class MockTwitter:
         self.user_timeline -= 1
         if self.user_timeline < 0:
             self.did_not_back_off = True
+        if random.uniform(0.0,1.0)<0.5:
+            # randomly break the crawler
+            print "Sent broken data"
+            return [{"user":{"id":123},
+                     "id":123,
+                     "followers_count":-1,
+                     "friends_count":None,'text':u"ðåçð¶ßå",
+                     'iso_language_code':'en',
+                     'entities':{"hashtags": [
+                    {
+                        "text": u"ðåçð",
+                        "indices": [20,34]
+                    }
+                ]
+                , 'user_mentions':{'id':15546}}}]
         return fake_tweets
 
     def get_list_statuses(self, **kwargs):
@@ -2423,6 +2473,19 @@ class MockTwitter:
         self.list_statuses -= 1
         if self.list_statuses < 0:
             self.did_not_back_off = True
+        if random.uniform(0.0,1.0)<0.5:
+            # randomly break the crawler
+            print "Sent broken data"
+            return [{"followers_count":-1,
+                     "friends_count":None,'text':u"ðåçð¶ßå",
+                     'iso_language_code':'en',
+                     'entities':{"hashtags": [
+                    {
+                        "text": u"ðåçð",
+                        "indices": [20,34]
+                    }
+                ]
+                         ,'user_mentions':{'id':15546}}}]
         return fake_tweets
 
     def lookup_user(self, **kwargs):
@@ -2431,6 +2494,9 @@ class MockTwitter:
         self.lookup -= 1
         if self.lookup < 0:
             self.did_not_back_off = True
+        if random.uniform(0.0,1.0)<0.15:
+            print "Sent incomplete data"
+            return {'user':{'id':123}}
         return fake_lookup_data
 
     def add_list_member(self, **kwargs):

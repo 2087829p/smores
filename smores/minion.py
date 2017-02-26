@@ -18,6 +18,7 @@ class Minion(threading.Thread):
         self._scheduler = scheduler
         self._lock = lock
         self._cond = threading.Condition()
+        self.daemon = True
 
     def interrupt(self):
         self._is_running = False
@@ -130,5 +131,5 @@ class Streamion(Minion):
                 #    print "Requesting trends"
                  #   trends = self._twitter.get_trends(self._task['data'])
             except Exception as e:
-                print "Streamion encountered and error: %s" % e.message
+                print "Streamion encountered an error: %s" % e.message
         self._streamer.disconnect()

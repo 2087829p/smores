@@ -114,7 +114,8 @@ class Preprocessor(Filter):
     def process(self, data):
         using_stopwords = len(self._stopwords) != 0
         # remove non English tweets
-        data = filter(lambda x:x.get('metadata',{'iso_language_code':'nen'}).get('iso_language_code','nen')=='en',data)
+        data = filter(lambda x:x.get('metadata',{'iso_language_code':'nen'}).get('iso_language_code','nen')=='en'
+                               and all_ascii(x.get('text','')),data)
         if using_stopwords:
             return self.__process_using_neg_dict__(data)
         else:

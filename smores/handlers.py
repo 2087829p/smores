@@ -368,7 +368,7 @@ class TwitterHandler:
             query = keywords.pop()
             if len(keywords) > 1:
                 current_length = len(query)
-                while current_length < query_max_length:
+                while current_length < query_max_length and len(keywords) > 0:
                     op = ' OR '
                     if current_length + len(op) + len(keywords[-1]) < query_max_length:
                         query += op + keywords.pop()
@@ -377,11 +377,11 @@ class TwitterHandler:
                         break
             # keywords = ' OR '.join(keywords)
             max_attempts -= 1
-        try:
-            data += self._twitter.search(q=query, count=100, include_entities=True).get('statuses', [])
-        except Exception as e:
-            print query
-            print "Search failed cause: %s" % e.message
+            try:
+                data += self._twitter.search(q=query, count=100, include_entities=True).get('statuses', [])
+            except Exception as e:
+                print query
+                print "Search failed cause: %s" % e.message
         return data
 
     def get_trends(self, args):

@@ -21,6 +21,7 @@ user_filter = lambda x:filter(lambda y:y['protected']==False and y['statuses_cou
 # a handy functional expression to check if the trends data is data or list of locations for which we want trends
 contains_locations = lambda x: isinstance(x, list) and any(
                         [('location' in i or 'woeid' in i or 'lat' in i or 'long' in i) for i in x])
+all_ascii = lambda x:all(ord(c) < 128 for c in x)
 class KMeanClassifier:
     def __init__(self):
         self._pos = [0.0 for i in range(RUNNING_CYCLE)]
@@ -104,7 +105,6 @@ class NeuralNetwork:
 
     def predict(self, X):
         lo = X
-        print "Xx="+str(X)
         for l in xrange(len(self._w)):
             lo = self.__sigmoid__(np.dot(lo, self._w[l]))
         return lo
