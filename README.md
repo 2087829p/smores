@@ -37,6 +37,11 @@ to the `crawl` function or by registering it with an instance of `smores.schedul
  myfilter = MyFilter(service, store, filters)
  scheduler.register(myfilter)
 ```
+In order for the crawler to work all accounts and API tokens need to be specified in the `smores\data\longin` file whith the following structure:
+```
+[site:<SITE NAME(e.g twitter)>,oauth_token:<TOKEN>,oauth_secret:<SECRET>....etc]
+```
+It is strongly recommended that the `explore()` function from the `__init__.py` file is ran and the crawler is left to work for a few days in order to build a sufficiently large database of twitter users, which can be followed.
 ## Requirements:
 Twython - https://twython.readthedocs.io/en/latest/usage/install.html <br />
 pymongo - http://api.mongodb.com/python/current/installation.html<br />

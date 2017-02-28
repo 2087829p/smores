@@ -309,7 +309,7 @@ class TwitterHandler:
             if current_id == 0:
                 # if first run
                 # get timeline
-                temp_data += self._twitter.get_home_timeline()
+                temp_data += self._twitter.get_home_timeline(count=200)
                 # set current_id to the last id since we will request the old timeline
                 current_id = temp_data[-1]["id"]
                 # set task id to the top id since next time we will request the up to date timeline
@@ -350,11 +350,21 @@ class TwitterHandler:
                                          include_entities=True)  # user = 900, app = 300
         # convert data from user info to tweet
         ret_data = []
-        for i in data:
-            if 'status' in i:
-                tweet = i['status']
-                i.pop('status')
-                tweet['user'] = i
+        if isinstance(data,list):
+            for i in data:
+                if 'status' in i:
+                    try:
+                        tweet = i['status']
+                        i.pop('status')
+                        tweet['user'] = i
+                        ret_data.append(tweet)
+                    except:
+                        print i
+        elif isinstance(data,dict):
+            if 'status' in data:
+                tweet = data['status']
+                data.pop('status')
+                tweet['user'] = data
                 ret_data.append(tweet)
         return ret_data
 

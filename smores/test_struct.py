@@ -1,7 +1,8 @@
 # coding=utf8
+import random
+
 from twython import TwythonError
 from twython import TwythonRateLimitError
-import random
 
 __author__ = 'tony petrov'
 # The fake object samples are taken from https://dev.twitter.com/rest/reference
@@ -27,12 +28,12 @@ fake_tweets = [
                 }
             ],
             "hashtags": [
-                {'text':'lala',
-                        "indices": [
-                        20,
-                        34
-                    ]
-                },
+                {'text': 'lala',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 },
                 {'text': 'gaga',
                  "indices": [
                      20,
@@ -229,6 +230,255 @@ fake_tweets = [
         "in_reply_to_status_id": None
     }
 ]
+broken_tweets = [
+    {
+        "coordinates": None,
+        "favorited": False,
+        "truncated": False,
+        "created_at": "Wed Aug 29 17:12:58 +0000 2096",
+        "id_str": "240859602684612608",
+        "entities": {
+            "urls": [
+                {
+                    "expanded_url": "/blog/twitter-certified-products",
+                    "url": "https://t.co/MjJ8xAnT",
+                    "indices": [
+                        52,
+                        73
+                    ],
+                    "display_url": "dev.twitter.com/blog/twitter-c\u2026"
+                }
+            ],
+            "hashtags": [
+                {'text': u'ðå¶³¤éåäú¡²³½¼¾',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 },
+                {'text': 'gaga',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 }
+            ],
+            "user_mentions": [
+
+            ]
+        },
+        "in_reply_to_user_id_str": None,
+        "contributors": None,
+        "text": u"Intröducing the Twitter Certified Products Program: https://t.co/MjJ8xAnT n¶áäöëç",
+        "retweet_count": 121,
+        "in_reply_to_status_id_str": None,
+        "id": 240859602684612608,
+        "geo": None,
+        "retweeted": False,
+        "possibly_sensitive": False,
+        "in_reply_to_user_id": None,
+        "place": None,
+        "user": {
+            "profile_sidebar_fill_color": "DDEEF6",
+            "profile_sidebar_border_color": "C0DEED",
+            "profile_background_tile": False,
+            "name": u"Twitter APï",
+            "profile_image_url": "http://a0.twimg.com/profile_images/2284174872/7df3h38zabcvjylnyfe3_normal.png",
+            "created_at": "Wed May 23 06:01:13 +0000 2007",
+            "location": u"San Francisco, CÄ",
+            "follow_request_sent": False,
+            "profile_link_color": "0084B4",
+            "is_translator": False,
+            "id_str": "6253282",
+            "entities": {
+                "url": {
+                    "urls": [
+                        {
+                            "expanded_url": None,
+                            "url": "",
+                            "indices": [
+                                0,
+                                22
+                            ]
+                        }
+                    ]
+                },
+                "description": {
+                    "urls": [
+
+                    ]
+                }
+            },
+            "default_profile": True,
+            "contributors_enabled": True,
+            "favourites_count": 24,
+            "url": "",
+            "profile_image_url_https": "https://si0.twimg.com/profile_images/2284174872/7df3h38zabcvjylnyfe3_normal.png",
+            "utc_offset": -28800,
+            "id": 6253282,
+            "profile_use_background_image": True,
+            "listed_count": 10775,
+            "profile_text_color": "333333",
+            "lang": "en",
+            "followers_count": 1212864,
+            "protected": False,
+            "notifications": None,
+            "profile_background_image_url_https": "https://si0.twimg.com/images/themes/theme1/bg.png",
+            "profile_background_color": "C0DEED",
+            "verified": True,
+            "geo_enabled": True,
+            "time_zone": "Pacific Time (US & Canada)",
+            "description": "The Real Twitter API. I tweet about API changes, service issues and happily answer questions about Twitter and our API. Don't get an answer? It's on my website.",
+            "default_profile_image": False,
+            "profile_background_image_url": "http://a0.twimg.com/images/themes/theme1/bg.png",
+            "statuses_count": 3333,
+            "friends_count": 31,
+            "following": None,
+            "show_all_inline_media": False,
+            "screen_name": "twitterapi"
+        },
+        "in_reply_to_screen_name": None,
+        "source": "YoruFukurou",
+        "in_reply_to_status_id": None
+    },{
+        "coordinates": None,
+        "favorited": False,
+        "truncated": False,
+        "created_at": "Wed Aug 29 17:12:58 +0000 1996",
+        "id_str": "240859602684612608",
+        "entities": {
+            "urls": [
+                {
+                    "expanded_url": "/blog/twitter-certified-products",
+                    "url": "https://t.co/MjJ8xAnT",
+                    "indices": [
+                        52,
+                        73
+                    ],
+                    "display_url": "dev.twitter.com/blog/twitter-c\u2026"
+                }
+            ],
+            "hashtags": [
+                {'text': u'ðå¶³¤éåäú¡²³½¼¾',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 },
+                {'text': 'gaga',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 }
+            ],
+            "user_mentions": [
+
+            ]
+        },
+        "in_reply_to_user_id_str": None,
+        "contributors": None,
+        "text": u"Intröducing \u0420\u043e\u0441\u0441\u0438\u044f n¶áäöëç \u02ff\u0333",
+        "retweet_count": 121,
+        "in_reply_to_status_id_str": None,
+        "id": 240859626612608,
+        "geo": None,
+        "retweeted": False,
+        "possibly_sensitive": False,
+        "in_reply_to_user_id": None,
+        "place": None,
+        "in_reply_to_screen_name": None,
+        "source": "YoruFukurou",
+        "in_reply_to_status_id": None
+    },    {
+        "coordinates": None,
+        "favorited": False,
+        "truncated": False,
+        "created_at": "Wed Aug 29 17:12:58 +0000 2006",
+        "id_str": "240859602684612608",
+        "entities": {
+            "urls": [
+                {
+                    "expanded_url": "/blog/twitter-certified-products",
+                    "url": "https://t.co/MjJ8xAnT",
+                    "indices": [
+                        52,
+                        73
+                    ],
+                    "display_url": "dev.twitter.com/blog/twitter-c\u2026"
+                }
+            ],
+            "hashtags": [
+                {'text': u'ðå¶³¤éåäú¡²³½¼¾',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 },
+                {'text': 'gaga',
+                 "indices": [
+                     20,
+                     34
+                 ]
+                 }
+            ],
+            "user_mentions": [
+
+            ]
+        },
+        "in_reply_to_user_id_str": None,
+        "contributors": None,
+        "text": u"Intröducing the Twitter Certified Products Program: https://t.co/MjJ8xAnT n¶áäöëç",
+        "retweet_count": 121,
+        "in_reply_to_status_id_str": None,
+        "id": 240859602684612608,
+        "geo": None,
+        "retweeted": False,
+        "possibly_sensitive": False,
+        "in_reply_to_user_id": None,
+        "place": None,
+        "user": {
+            "profile_sidebar_fill_color": "DDEEF6",
+            "profile_sidebar_border_color": "C0DEED",
+            "profile_background_tile": False,
+            "name": u"Twitter APï",
+            "profile_image_url": "http://a0.twimg.com/profile_images/2284174872/7df3h38zabcvjylnyfe3_normal.png",
+            "created_at": "Wed May 23 06:01:13 +0000 2007",
+            "location": u"San Francisco, CÄ",
+            "follow_request_sent": False,
+            "profile_link_color": "0084B4",
+            "is_translator": False,
+            "default_profile": True,
+            "contributors_enabled": True,
+            "favourites_count": 24,
+            "url": "",
+            "profile_image_url_https": "https://si0.twimg.com/profile_images/2284174872/7df3h38zabcvjylnyfe3_normal.png",
+            "utc_offset": -28800,
+            "profile_use_background_image": True,
+            "listed_count": 10775,
+            "profile_text_color": "333333",
+            "lang": "en",
+            "followers_count": -5,
+            "protected": False,
+            "notifications": None,
+            "profile_background_image_url_https": "https://si0.twimg.com/images/themes/theme1/bg.png",
+            "profile_background_color": "C0DEED",
+            "verified": True,
+            "geo_enabled": True,
+            "time_zone": "Pacific Time (US & Canada)",
+            "description": u"\u0555\u0456\u05ab\u02bb",
+            "default_profile_image": False,
+            "profile_background_image_url": "http://a0.twimg.com/images/themes/theme1/bg.png",
+            "statuses_count": 3333,
+            "friends_count": None,
+            "following": None,
+            "show_all_inline_media": False,
+            "screen_name": "twitterapi"
+        },
+        "in_reply_to_screen_name": None,
+        "source": "YoruFukurou",
+        "in_reply_to_status_id": None
+    }]
 fr_list = {
     "previous_cursor": 0,
     "previous_cursor_str": "0",
@@ -1172,7 +1422,6 @@ fake_lookup_data = [
         "show_all_inline_media": True
     }
 ]
-
 fake_slugs = [
     {
         "name": "Art & Design",
@@ -2381,18 +2630,10 @@ class MockTwitter:
         self.home_timeline -= 1
         if self.home_timeline < 0:
             self.did_not_back_off = True
-        if random.uniform(0.0,1.0)<0.5:
+        if random.uniform(0.0, 1.0) < 0.5:
             # randomly break the crawler
             print "Sent broken data"
-            return [{"followers_count":-1,
-                     "friends_count":None,'text':u"ðåçð¶ßå",
-                     'iso_language_code':'en',
-                     'entities':{"hashtags": [
-                    {
-                        "text": u"ðåçð",
-                        "indices": [20,34]
-                    }
-                ],'user_mentions':{'id':15546}}}]
+            return broken_tweets
         return fake_tweets
 
     def create_list_members(self, **kwargs):
@@ -2450,21 +2691,10 @@ class MockTwitter:
         self.user_timeline -= 1
         if self.user_timeline < 0:
             self.did_not_back_off = True
-        if random.uniform(0.0,1.0)<0.5:
+        if random.uniform(0.0, 1.0) < 0.5:
             # randomly break the crawler
             print "Sent broken data"
-            return [{"user":{"id":123},
-                     "id":123,
-                     "followers_count":-1,
-                     "friends_count":None,'text':u"ðåçð¶ßå",
-                     'iso_language_code':'en',
-                     'entities':{"hashtags": [
-                    {
-                        "text": u"ðåçð",
-                        "indices": [20,34]
-                    }
-                ]
-                , 'user_mentions':{'id':15546}}}]
+            return broken_tweets
         return fake_tweets
 
     def get_list_statuses(self, **kwargs):
@@ -2473,19 +2703,10 @@ class MockTwitter:
         self.list_statuses -= 1
         if self.list_statuses < 0:
             self.did_not_back_off = True
-        if random.uniform(0.0,1.0)<0.5:
+        if random.uniform(0.0, 1.0) < 0.5:
             # randomly break the crawler
             print "Sent broken data"
-            return [{"followers_count":-1,
-                     "friends_count":None,'text':u"ðåçð¶ßå",
-                     'iso_language_code':'en',
-                     'entities':{"hashtags": [
-                    {
-                        "text": u"ðåçð",
-                        "indices": [20,34]
-                    }
-                ]
-                         ,'user_mentions':{'id':15546}}}]
+            return broken_tweets
         return fake_tweets
 
     def lookup_user(self, **kwargs):
@@ -2494,9 +2715,9 @@ class MockTwitter:
         self.lookup -= 1
         if self.lookup < 0:
             self.did_not_back_off = True
-        if random.uniform(0.0,1.0)<0.15:
+        if random.uniform(0.0, 1.0) < 0.15:
             print "Sent incomplete data"
-            return {'user':{'id':123}}
+            return {'user': {'id': 123}}
         return fake_lookup_data
 
     def add_list_member(self, **kwargs):

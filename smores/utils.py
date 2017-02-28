@@ -24,9 +24,9 @@ contains_locations = lambda x: isinstance(x, list) and any(
 all_ascii = lambda x:all(ord(c) < 128 for c in x)
 class KMeanClassifier:
     def __init__(self):
-        self._pos = [0.0 for i in range(RUNNING_CYCLE)]
+        self._pos = [1.0 for _ in xrange(RUNNING_CYCLE)]
         self._pos_size = 0
-        self._neg = [0.0 for i in range(RUNNING_CYCLE)]
+        self._neg = [1.0 for _ in xrange(RUNNING_CYCLE)]
         self._neg_size = 0
 
     def train(self, s, r):
@@ -38,7 +38,7 @@ class KMeanClassifier:
         else:
             # train negative classifier
             self._neg_size += 1
-            self._pos = map(lambda m, x: m + ((x - m) / self._neg_size), self._neg, s)
+            self._neg = map(lambda m, x: m + ((x - m) / self._neg_size), self._neg, s)
 
     def __dist__(self, x, y):
         return np.sqrt((x - y) ** 2)

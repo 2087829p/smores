@@ -32,7 +32,7 @@ def politeness_test():
     sh = s.Scheduler(use='model', site='twitter', multicore=True)
     sh.start()
     import time
-    t = 600
+    t = 60
     try:
         while t > 0:
             time.sleep(1)
@@ -45,7 +45,7 @@ def politeness_test():
     else:
         print 'Tests failed:'
         print sh._handlers[0]._twitter.get_failures()
-    sys.exit(0)
+    #sys.exit(0)
 
 
 def printStats(**kwargs):
@@ -130,13 +130,12 @@ class StatsFilter(Filter):
             print "%d tweets processed" % success
 
 
-def explore_only():
+def explore_only(testing,t=3600):
     c.EXPLORING = True
-    c.TESTING = True
+    c.TESTING = testing
     sh = s.Scheduler(use='model', site='twitter', storage=lambda x: x, multicore=False)
     sh.start()
     import time
-    t = 3600
     try:
         while t > 0:
             time.sleep(1)
@@ -184,18 +183,19 @@ def model_comparison():
     # with futures.ThreadPoolExecutor(max_workers=2) as pool:
     #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='model')
     #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='streaming')
-    sys.exit(0)
+    #sys.exit(0)
 
-def run_hybrid():
+def run_hybrid(t=3600,testing=False,classifier=PERCEPTRON_CLASSIFIER):
     f1 = StatsFilter(TWITTER_PLUGIN_SERVICE, lambda x: x, None)
-    #c.TESTING = True
+    if testing:
+        c.TESTING = True
+        c.RANK_RESET_TIME=15
     sh = s.Scheduler(use='hybrid', site='twitter', storage=lambda x: x, plugins=[f1],
-                     multicore=True,classifier=DEEP_NEURAL_NETWORK_CLASSIFIER)
+                     multicore=True,classifier=classifier)
     sh.start()
     from time import gmtime, strftime
     print "Test started at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
     import time
-    t = 3600
     try:
         while t > 0:
             time.sleep(1)
@@ -207,11 +207,19 @@ def run_hybrid():
     print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\n" % (
         f1.total_tweets, len(f1.unique_tweets), len(f1.unique_users), f1.lost_data)
     print "Test completed at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    #sys.exit(0)
+def full_testing():
+    """""performs offline testing of the crawler to try and find bugs and issues"""
+    #tests to see if the system complies with politeness rules
+    politeness_test()
+    #=========tests to see if the classifiers and ranking filter can handle broken data=============
+    run_hybrid(60,True,PERCEPTRON_CLASSIFIER)
+    run_hybrid(60,True,DEEP_NEURAL_NETWORK_CLASSIFIER)
+    run_hybrid(60,True,K_MEANS_CLASSIFIER)
+    #================================================================================================
     sys.exit(0)
-
-
 # politeness_test()
 #model_comparison()
 #explore_only()
-run_hybrid()
+run_hybrid(3600,False,DEEP_NEURAL_NETWORK_CLASSIFIER)
 # crawl(use='model')

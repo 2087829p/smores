@@ -55,8 +55,8 @@ class Minion(threading.Thread):
                 fetch = self._task['fetch']
             try:
                 if isinstance(work_set, list):
-                    data = fetch(work_set.pop())
                     print self.name + ' executing ' + str(self._task['op']) + ' ' + str(len(work_set)) + ' items left'
+                    data = fetch(work_set.pop())
                 else:
                     print self.name + ' executing ' + str(self._task['op'])
                     data = fetch(work_set)
@@ -101,6 +101,7 @@ class Streamion(Minion):
         self._task['store'](data)
 
     def run(self):
+        import constants as c
         print "Starting streamer"
         import constants as c
         from test_struct import Mock_Twitter_Stream

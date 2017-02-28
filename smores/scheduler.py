@@ -56,39 +56,44 @@ class RankingFilter(st.Filter):
                 # then increase the weight of smaller tslp's since shorter time means more active user!
                 u['tslp'] = 1.0 - (np.clip(fit_in_range(0.0,RUNNING_CYCLE,u['tslp']),0,1))
                 influential_users.append((float(self._classifier.predict(
-                    [u['tslp'], u['followers'], u['friends'],  u['mentions'], u['post_frq']])), k))
-                # = [(self._classifier.predict(np.array(self._influential_users[u].values())), u) for u in
-                #         self._influential_users.keys()]
+                    [u['tslp'], u['followers'], u['friends'],  u['mentions'], u['post_frq']])[0]), k))
         else:
             influential_users = [(self._classifier.predict(np.array(self._influential_users[u]['series'])), u) for u in
                                  self._influential_users.keys()]
-        hot_topics = []
         max_number_of_tweets_per_cycle = 500
         if self._training_topics:
-            topics = sorted(self._hot_topics, key=self._hot_topics.get)
+            topics = self._training_topics
             max_number_training_samples = 50
             take = min(len(topics) / 4, max_number_training_samples)
-            pos_t = topics[-take:]
-            neg_t = topics[:take]
-            for i in range(take):
+            pos_t = []#[topics[t] for t in topics if t in self._hot_topics][-take:]
+            neg_t = []#[topics[t] for t in topics if t not in self._hot_topics][:take]
+            for t in topics:
+                if t in self._hot_topics:
+                    pos_t.append(t)
+                else:
+                    neg_t.append(t)
+            pos_t = pos_t[:take]
+            neg_t = neg_t[:take]
+            for i in xrange(min(len(pos_t),len(neg_t))):
                 try:
                     self._topic_classifier.train(self._training_topics[pos_t[i]]['series'], 1)
                     self._topic_classifier.train(self._training_topics[neg_t[i]]['series'], 0)
-                    hot_topics = [(self._topic_classifier.predict(self._hot_topics[k]['series']), k) for k in
+                except Exception as e:
+                    print "Error while training classifier : %s" % e.message
+        hot_topics = [(self._topic_classifier.predict(self._hot_topics[k]['series']), k) for k in
                           self._hot_topics.keys()]
-                except:
-                    pass
         self._training_topics = self._hot_topics
         out = (hot_topics, influential_users)
         samples = random.sample(out[1], min(len(out[1]), max_number_of_tweets_per_cycle))
         if self._training_users:
+            epochs = 80
             for s in self._training_users.keys():
                 u = self._training_users[s]
                 if isinstance(self._classifier, NeuralNetwork):
                     self._classifier.train(
                         [u['tslp'], u['followers'], u['friends'], u['mentions'],
                                  u['post_frq']],
-                        [1.0 if s in self._influential_users else 0.0],100)
+                        [1.0 if s in self._influential_users else 0.0],epochs)
                 else:
                     self._classifier.train(u['series'], 1.0 if s in self._influential_users else 0.0)
         self._training_users = {s[1]: self._influential_users[s[1]] for s in samples}
@@ -100,13 +105,13 @@ class RankingFilter(st.Filter):
     def process(self, data):
         now = time.time()
         cycle = int(now - self._last_updated)
-        if now > self._last_updated + RANK_RESET_TIME:
+        if now > self._last_updated + c.RANK_RESET_TIME:
             return self.__train_and_rank__(now)
         if isinstance(data,dict):   # can't iterate over a dict so cast it to a list
             data = [data]
         for t in data:
             if 'user' not in t or 'id' not in t.get('user',{}):
-                return
+                continue
             user = self._influential_users.setdefault(t['user']['id'],
                                                dict(tslp=time.time(), followers=0, friends=0, total_posts=0, mentions=0,
                                                     post_frq=0, series=[1.0 for _ in range(RUNNING_CYCLE)]))
@@ -117,7 +122,7 @@ class RankingFilter(st.Filter):
             user["friends"] = fit_in_range(0, scaling_factor,log10(max(1,t["user"].get("friends_count",1))))
             user["total_posts"] += 1
             user["post_frq"] = user["total_posts"] / float(RUNNING_CYCLE)
-            user['series'][min(cycle, int(now - created))] += 1.0
+            user['series'][ max(0,min(cycle, int(now - created)))] += 1.0
             entities = t.get('entities',{})
             if "hashtags" in entities:
                 for h in entities["hashtags"]:
@@ -126,7 +131,7 @@ class RankingFilter(st.Filter):
                         continue
                     topic = self._hot_topics.setdefault(tag, dict(series=[1.0 for _ in range(RUNNING_CYCLE)],
                                                            count=0))  # dict(count=0,likes=0,rts=0))
-                    topic['series'][min(cycle, int(now - created))] += 1.0
+                    topic['series'][max(0,min(cycle, int(now - created)))] += 1.0
                     # user['tags'] = user.setdefault('tags',set()).add(tag)
                     topic["count"] += 1
                     # topic["likes"] += t["favorite_count"]
@@ -395,14 +400,16 @@ class Scheduler:
         ret = nlargest(n, self._target_queue["users"])
         self._target_queue['users'].sort(reverse=True)
         self._target_queue["users"] = self._target_queue["users"][n:]
-        return ret
+        return [i[1] for i in ret]
 
     def __get_top_n_trends__(self, n,SYS_INIT=False):
         if self._use == TWITTER_HYBRID_MODEL and not SYS_INIT:
+            if n == -1:
+                return [i[1] for i in self._trends]
             ret = nlargest(n, self._trends)
             self._trends.sort(reverse=True)
             self._trends = self._trends[n:]
-            return ret
+            return [i[1] for i in ret]
         else:
             try:
                 if c.TIME_TO_UPDATE_TRENDS < time.time():
@@ -428,7 +435,7 @@ class Scheduler:
                 if not self._target_queue[task]:
                     return [self.__get_top_n_accounts__(TWITTER_BULK_LIST_SIZE) for _ in
                             xrange(TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE)]
-                predicted = [self.__get_top_n_accounts__(TWITTER_BULK_LIST_SIZE) for _ in
+                predicted = [{'ids':self.__get_top_n_accounts__(TWITTER_BULK_LIST_SIZE)} for _ in
                              xrange(int(TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * PARTITION_FACTOR))]
                 normal = self._target_queue[task].pop()
                 self._target_queue[task].appendleft(normal)
