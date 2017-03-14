@@ -73,3 +73,6 @@ K_MEANS_CLASSIFIER = 203
 # other control constants and variables
 RANK_RESET_TIME = 600  # every 10 mins
 TIME_TO_UPDATE_TRENDS = 0
+FILTER_STREAM = False
+FRESH_TWEETS_ONLY = False
+PARTITION_FACTOR = 0.5

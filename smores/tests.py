@@ -5,6 +5,9 @@ from math import *
 from utils import *
 from collections import Counter
 from scheduler import Scheduler
+import copy
+import constants as c
+
 model_path = "E:/stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz"
 jar_path = "E:/stanford-ner/stanford-ner.jar"
 BURST_LENGTH_SCALE = 1.5
@@ -44,13 +47,13 @@ class Cluster:
         return len(self._items)
     def entities(self):
         """Returns the number of times each entity is mentioned in all the tweets in the cluster"""
-        return Counter([t['ner_tags'] for t in self._items])
+        return Counter(flatten(map(lambda t:t['ner_tags'],self._items)))
 
 class BurstWindow:
     def __init__(self,length):
         self._mean = 0.0
         self._dev = 0.0
-        self._s = [0.0 for i in range(3)]
+        self._s = [0.0 for _ in range(3)]
         self._last_burst = 0
         self._length = length
         self._last_update = time.time()
@@ -60,15 +63,16 @@ class BurstWindow:
             self._s[i] += pow(get_tweet_timestamp(t),i)
 
     def is_bursting(self):
-        return self._mean != 0 and self._s[0] > 3*self._dev + self._mean
+        return self._mean != 0 and self._s[0] > 3*self._dev + self._mean or (c.TESTING and self._s[0]>0)
 
     def update(self):
         now = time.time()
+        time_scale = 60 if not c.TESTING else 1
         # check if its time to actually update
-        if now < self._last_update+self._length*60:
+        if now < self._last_update+self._length*time_scale:
             return
         # check if we are in burst mode
-        if self._last_burst + (BURST_LENGTH_SCALE * self._length * 60) > now:
+        if self._last_burst + (BURST_LENGTH_SCALE * self._length * time_scale) > now:
             return
         # check if the cluster is bursting
         if self.is_bursting():
@@ -99,15 +103,15 @@ class Preprocessor(Filter):
     def __process_using_neg_dict__(self,data):
         output = []
         for t in data:
-            text = t['text'].split()
+            text = t['text'].lower().split()
             tags = set(text).difference(self._stopwords)
             self._stopword_counter.add_doc(text)
             if self._stopword_counter.is_ready_to_update():
                 self._stopwords = self._stopword_counter.get_negative_dictionary()
                 self._stopword_counter.update()
             if tags:
-                if not t['retweeted']:
-                    t['ner_tags'] = [t[0] for t in tags]
+                if 'retweet_status' not in t:
+                    t['ner_tags'] = list(tags)
                     output.append(t)
         return output
 
@@ -133,17 +137,22 @@ class Clusterer(Filter):
         self._max_docs = max_docs
         self._events = dict()
         self._merged = list()
+        self._cluster_table = dict()
+        self._finalized_events = list()
         self._current_cluster_id = 0
+
     def __tf__(self,t, d):
         doc = d.lower().split()
         return doc.count(t.lower()) / float(len(doc))
+
     def __idf__(self,t, docs):
         N = 0
         for d in docs:
-            if t.lower() in d.lower().split():
+            if t.lower() in d['text'].lower().split():
                 N += 1
         Dc = float(len(docs))
         return log(((Dc-N)+0.5)/(N+0.5))   # using the double normalized version of idf to prevent division by 0 and log of infinity
+
     def cos_dist(self,doc,tweet,col):
         """Computes the cosine similarity score between a tweet and a doc"""
         MAX_TAKE = 10
@@ -177,57 +186,103 @@ class Clusterer(Filter):
             for i in xrange(len(self._events[e])):
                 e_items += self._events[e][i].entities()
                 total_tweets += self._events[e][i].size()
-            linked = list(e)
+            linked = [e]
             # go through the entities with the highest mention count
             for i in e_items.most_common():
                 # if entity i is mentioned in at least 50% of all tweets in the clusters make a link between it and e
-                if i[1]/float(total_tweets) >= 0.5:
+                if i[1]/float(total_tweets) >= 0.5 and i[0] not in linked:
                     linked.append(i[0])
                 else:
                     break
-            self._merged.append(linked)
-
+            if len(linked)>1 and linked not in self._merged:
+                self._merged.append(linked)
 
     def get_next_cluster_id(self):
         self._current_cluster_id += 1
         return self._current_cluster_id
+
+    def get_events(self):
+        events = []
+        with self._lock:
+            events = copy.deepcopy(self._events.keys())
+        return events
+
+    def __add_to_indexes__(self, tweet,cid):
+        for n in tweet['ner_tags']:
+            self._inv_index[n].append(tweet)
+            if n not in self._cluster_table:
+                self._cluster_table[n] = [self._clusters[cid]]
+            elif self._cluster_table[cid]:
+                self._cluster_table[n].append(self._clusters[cid])
+
+    def __clean_up_events__(self):
+        for e in self._events:
+             if all(map(lambda w: not w.is_bursting(),self._burst_windows[e])):
+                 self._finalized_events.append(e)
+
+
+    def __check_windows__(self,t):
+        import constants as c
+        size_threshold = 10 if not c.TESTING else 1
+        for n in t['ner_tags']:
+            if n in self._finalized_events:
+                continue    # event is finalized don't add clusters to it
+            for w in self._burst_windows[n]:
+                w.add(t)
+                w.update()
+                if w.is_bursting():
+                    self._events[n] = list(set(self._events.get(n,[]) +
+                                               [c for c in self._cluster_table[n] if c.size() > size_threshold]))
+
+
     def process(self, data):
         for t in data:
+            docs = []
             for nt in t['ner_tags']:
                 if nt not in self._inv_index:
                     self._inv_index[nt] = [t]
                     self._burst_windows[nt] = [BurstWindow(5*2**i) for i in range(7)]
                 else:
-                    e = self._inv_index[nt][:self._max_docs]
-                    tx = t['text']
-                    match = self.find_max_match(tx,e)
-                    if match[1] > self._threshold:
-                        self._inv_index[nt].append(t)
-                        cluster_id = match[0].get('cluster',-1)
-                        if cluster_id > -1:
-                            self._clusters.get([nt],[])[cluster_id].add(t)
+                    docs += self._inv_index[nt][:self._max_docs]
+            tx = t['text']
+            match = self.find_max_match(tx,docs)
+            if match[1] > self._threshold:
+                cluster_id = match[0].get('cluster',-1)
+                if cluster_id > -1:
+                    clusters = self._clusters.get(cluster_id)
+                    clusters.add(t)
                             #e.append(self._clusters[-1])
-                        else:
-                            cluster_id = self.get_next_cluster_id()
-                            match[0]['cluster'] = cluster_id
-                            cluster = self._clusters.get(nt,[])
-                            cluster.append(Cluster(t,match[0]))
-                        t['cluster'] = cluster_id
-                        for w in self._burst_windows[nt]:
-                            w.add(t)
-                            w.update()
-                            if w.is_bursting():
-                                self._events[nt] = [c for c in self._clusters[nt] if c.size() > 10]
+                else:
+                    cluster_id = self.get_next_cluster_id()
+                    match[0]['cluster'] = cluster_id
+                    self._clusters[cluster_id] = Cluster(t,match[0])
+                    t['cluster'] = cluster_id
+                self.__add_to_indexes__(t,cluster_id)
+                self.__check_windows__(t)
+        self.__clean_up_events__()
         self.merge_events()
 
 
 
-def run_algo():
+def run_algo(t,testing=False):
     import os
     java_path = "C:/Program Files/Java/jdk1.8.0_25/bin/java.exe"
     os.environ['JAVAHOME'] = java_path
-    preproc = Preprocessor(TWITTER_PLUGIN_SERVICE,None,[])
+    stopwords = ["the","a","is","am","was","has","i","he","she","it","are","we","they","an","and","of","have",
+                 "had","our","your","its"]
+    preproc = Preprocessor(TWITTER_PLUGIN_SERVICE,None,[],stopwords=set(stopwords))
     clusterer = Clusterer(CRAWLER_PLUGIN_SERVICE,None,[])
     preproc.register_plugin(clusterer)
-    s = Scheduler(plugins=[preproc],storage=lambda x:x)
+    c.TESTING = testing
+    s = Scheduler(use=TWITTER_STREAMING_HARVESTER_NON_HYBRID,plugins=[preproc],storage=lambda x:x,multicore=True)
     s.start()
+    import time
+    try:
+        while t > 0:
+            time.sleep(1)
+            t -= 1
+    except KeyboardInterrupt:
+        pass
+    s.terminate()
+    print "events detected: %s" % ','.join(clusterer.get_events())
+run_algo(60,True)

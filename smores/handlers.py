@@ -10,6 +10,7 @@ from twython import TwythonStreamer, TwythonError
 import random
 import string
 import constants
+import constants as c
 from utils import user_filter
 import storage as st
 import test_struct as test
@@ -337,7 +338,10 @@ class TwitterHandler:
     # fetches the specified user's timeline
     def fetch_user_timeline(self, user):
         # count is set to 200 since that's the max that twitter would actually return despite the docs saying 3200
-        return self._twitter.get_user_timeline(user_id=user, count=200)  # user = 900 , app = 1500
+        if c.FRESH_TWEETS_ONLY:
+            return self._twitter.get_user_timeline(user_id=user)
+        else:
+            return self._twitter.get_user_timeline(user_id=user, count=200)  # user = 900 , app = 1500
 
     # fetches the tweets in the specified list of _users
     def fetch_list_tweets(self, list):

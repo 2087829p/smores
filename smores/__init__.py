@@ -4,7 +4,10 @@ import constants as c
 import sys
 from storage import Filter
 from utils import *
-
+from memory_profiler import profile
+import json
+import copy
+from storage import __abs_path__
 scheduler = None
 
 
@@ -101,16 +104,32 @@ class StatsFilter(Filter):
         self.unique_users = set()
         # self.total_users = 0
         self.total_tweets = 0
-        self.unique_tweets = set()
+        self.unique_tweets = 0
         self.lost_data = 0
-
+        self.data_size = 0
+        self.foreign = 0
+        self.distribution = dict()
+    def get_distribution(self):
+        from collections import Counter
+        with self._lock:
+            d = dict(Counter(self.distribution.values()))
+        return d
+    def get_raw_distribution(self):
+        d_copy = None
+        with self._lock:
+            d_copy=copy.deepcopy(self.distribution)
+        return d_copy
     def process(self, data):
         #print "processing data"
         if not isinstance(data, list):
             try:
                 self.unique_users.add(data['user']['id'])
-                self.unique_tweets.add(data['id'])
+                self.unique_tweets += 1 if 'retweeted_status' not in data else 0
                 self.total_tweets += 1
+                self.data_size += sys.getsizeof(data)
+                self.foreign += 1 if not all_ascii(data['text']) else 0
+                with self._lock:
+                    self.distribution[data['user']['id']] = self.distribution.get(data['user']['id'],0) + 1
                 #print "1 tweet processed"
             except Exception as e:
                 #print "Error in tweet format: " + str(data)
@@ -121,8 +140,12 @@ class StatsFilter(Filter):
             for t in data:
                 try:
                     self.unique_users.add(t['user']['id'])
-                    self.unique_tweets.add(t['id'])
+                    self.unique_tweets+= 1 if 'retweeted_status' not in t else 0
                     self.total_tweets += 1
+                    self.foreign += 1 if not all_ascii(t['text']) else 0
+                    self.data_size += sys.getsizeof(t)
+                    with self._lock:
+                        self.distribution[t['user']['id']] = self.distribution.get(t['user']['id'], 0) + 1
                     success += 1
                 except Exception as e:
                     #print "Error in tweet format: " + str(t)
@@ -144,7 +167,7 @@ def explore_only(testing,t=3600):
         pass
     sh.terminate()
 
-
+@profile
 def model_comparison():
     # import storage, time
 
@@ -157,7 +180,7 @@ def model_comparison():
     f1 = StatsFilter(TWITTER_STREAMING_PLUGIN_SERVICE, lambda x: x, None)
     f2 = StatsFilter(TWITTER_HARVESTER_PLUGIN_SERVICE, lambda x: x, None)
     #c.TESTING=True
-    sh = s.Scheduler(use='both', site='twitter', storage=lambda x: x, plugins=[f1, f2], multicore=True)
+    sh = s.Scheduler(use='both', site='twitter', storage=lambda x: x, plugins=[f1,f2], multicore=True)
     sh.start()
     from time import gmtime, strftime
     print "Test started at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
@@ -174,22 +197,30 @@ def model_comparison():
     # db2.shutdown()
     # from concurrent import futures
     print "\nHarvester data"
-    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\n" % (
-    f2.total_tweets, len(f2.unique_tweets), len(f2.unique_users), f2.lost_data)
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\ndata size = %d MB\nnon-English tweets = %d\n" % (
+    f2.total_tweets, f2.unique_tweets, len(f2.unique_users), f2.lost_data,f2.data_size/1000000,f2.foreign)
+    print "\npurity = %f\n tweets per user= %f\n" % (
+    f2.unique_tweets / float(f2.total_tweets), f2.total_tweets / float(len(f2.unique_users)))
+    json.dump(f2.get_raw_distribution(), open(__abs_path__("data\harvester_distribution.json"), 'w'))
     print "Streaming model data"
-    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\n" % (
-    f1.total_tweets, len(f1.unique_tweets), len(f1.unique_users), f1.lost_data)
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\ndata size = %d MB\nnon-English tweets = %d\n" % (
+    f1.total_tweets, f1.unique_tweets, len(f1.unique_users), f1.lost_data, f1.data_size/1000000,f1.foreign)
+    print "\npurity = %f\n tweets per user= %f\n" % (
+    f1.unique_tweets / float(f1.total_tweets), f1.total_tweets / float(len(f1.unique_users)))
     print "Test completed at "+ strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    json.dump(f1.get_raw_distribution(), open(__abs_path__("data\stream_distribution.json"), 'w'))
+
     # with futures.ThreadPoolExecutor(max_workers=2) as pool:
     #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='model')
     #    pool.submit(printStats, ip='localhost', port='', db=mdb, model='streaming')
     #sys.exit(0)
-
+@profile
 def run_hybrid(t=3600,testing=False,classifier=PERCEPTRON_CLASSIFIER):
     f1 = StatsFilter(TWITTER_PLUGIN_SERVICE, lambda x: x, None)
     if testing:
         c.TESTING = True
         c.RANK_RESET_TIME=15
+    c.FILTER_STREAM = True
     sh = s.Scheduler(use='hybrid', site='twitter', storage=lambda x: x, plugins=[f1],
                      multicore=True,classifier=classifier)
     sh.start()
@@ -204,9 +235,13 @@ def run_hybrid(t=3600,testing=False,classifier=PERCEPTRON_CLASSIFIER):
         pass
     sh.terminate()
     print "Results"
-    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\n" % (
-        f1.total_tweets, len(f1.unique_tweets), len(f1.unique_users), f1.lost_data)
+    print "total tweets = %d\nunique tweets = %d\nunique users = %d\nloses = %d\ndata size = %d MB \nnon-English tweets = %d\n" % (
+        f1.total_tweets, f1.unique_tweets, len(f1.unique_users), f1.lost_data,f1.data_size/1000000,f1.foreign)
+    print "Features"
+    print "\npurity = %f\n tweets per user= %f\n" % (f1.unique_tweets/float(f1.total_tweets),f1.total_tweets/float(len(f1.unique_users)))
     print "Test completed at " + strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    json.dump(f1.get_raw_distribution(),open(__abs_path__("data\hybrid_distribution.json"),'w'))
+    json.dump(f1.get_distribution(),open(__abs_path__("data\processed_hybrid_distribution.json"),'w'))
     #sys.exit(0)
 def full_testing():
     """""performs offline testing of the crawler to try and find bugs and issues"""
@@ -222,4 +257,4 @@ def full_testing():
 #model_comparison()
 #explore_only()
 run_hybrid(3600,False,DEEP_NEURAL_NETWORK_CLASSIFIER)
-# crawl(use='model')
+#crawl(use='model')

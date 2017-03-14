@@ -2775,6 +2775,12 @@ class Mock_Stream:
             self.streamer.on_error(123, [])
         else:
             self.streamer.on_success(fake_tweets)
+    def sample(self):
+        fail = random.uniform(0.0, 1.0) < 0.1
+        if fail:
+            self.streamer.on_error(123, [])
+        else:
+            self.streamer.on_success(fake_tweets)
 
 
 class Mock_Twitter_Stream:

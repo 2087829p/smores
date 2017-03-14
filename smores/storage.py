@@ -188,8 +188,6 @@ class Filter(threading.Thread):
         'Add new plugin to the end of the pipeline'
         if isinstance(p, Filter):
             self._plugins.append(p)
-            if self.is_alive:
-                p.start()
 
     def run(self):
         while self._running:

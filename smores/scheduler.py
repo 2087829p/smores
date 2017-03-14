@@ -21,7 +21,7 @@ __author__ = 'tony petrov'
 # 'store':f(x)                                  - address of function to which the data should be returned
 # 'timeout':213123                              - tells the scheduler that the task is unavailable for execution until the timestamp==time.now()
 
-PARTITION_FACTOR = 0.5
+
 DB_CONTEXT_SWITCH_TIMEOUT = 86400  # every day new db
 COLLECTION_CONTEXT_SWITCH_TIMEOUT = 3600  # every hour (aka cycle) new collection of docs
 
@@ -65,8 +65,9 @@ class RankingFilter(st.Filter):
             topics = self._training_topics
             max_number_training_samples = 50
             take = min(len(topics) / 4, max_number_training_samples)
-            pos_t = []#[topics[t] for t in topics if t in self._hot_topics][-take:]
-            neg_t = []#[topics[t] for t in topics if t not in self._hot_topics][:take]
+            # split topics into 2 sets positive and negative
+            pos_t = []
+            neg_t = []
             for t in topics:
                 if t in self._hot_topics:
                     pos_t.append(t)
@@ -74,6 +75,7 @@ class RankingFilter(st.Filter):
                     neg_t.append(t)
             pos_t = pos_t[:take]
             neg_t = neg_t[:take]
+            #====================================================
             for i in xrange(min(len(pos_t),len(neg_t))):
                 try:
                     self._topic_classifier.train(self._training_topics[pos_t[i]]['series'], 1)
@@ -118,8 +120,10 @@ class RankingFilter(st.Filter):
             created = get_tweet_timestamp(t)
             scaling_factor = 19
             user["tslp"] = created - user.get('tslp',time.time())
+            # scale friends and followers to fit range 0 to 1 the higher the number of friends/followers the closer to 1
             user["followers"] = fit_in_range(0, scaling_factor, log10(max(1,t["user"].get("followers_count",1))))
             user["friends"] = fit_in_range(0, scaling_factor,log10(max(1,t["user"].get("friends_count",1))))
+            #=================================================================================================
             user["total_posts"] += 1
             user["post_frq"] = user["total_posts"] / float(RUNNING_CYCLE)
             user['series'][ max(0,min(cycle, int(now - created)))] += 1.0
@@ -266,13 +270,13 @@ class Scheduler:
             task = self._tasks.get_nowait()[1]
             self._tasks.task_done()
             self._minions.append(m.Minion(task, lock=self._lock, scheduler=self))
-            # self._tasks.put_nowait(task)
+
 
     def __setup_streamer__(self, trend_data):
         login = [l for l in st.read_login(TWITTER_CREDENTIALS) if l['site'] == 'twitter']
         for i in range(len(login)):
             login[i]['id'] = i
-        serv = TWITTER_PLUGIN_SERVICE if self._use == TWITTER_HYBRID_MODEL else TWITTER_STREAMING_PLUGIN_SERVICE
+        serv = TWITTER_STREAMING_PLUGIN_SERVICE if self._use == TWITTER_STREAMING_BUCKET_MODEL else TWITTER_PLUGIN_SERVICE
         plugins = [p for p in self._plugins if p._for == serv]
         store = self._store if not self._predefined_store else self._storages
         t = {'site': 'twitter', 'op': TASK_FETCH_STREAM, 'data': trend_data, 'fetch': None, 'store': store,
@@ -282,7 +286,7 @@ class Scheduler:
 
     def __prepare_twitter__(self, tasks):
         """Generates a queue of tasks for the Twitter cycle harvester model"""
-        service = TWITTER_PLUGIN_SERVICE if self._use == TWITTER_HYBRID_MODEL else TWITTER_HARVESTER_PLUGIN_SERVICE
+        service = TWITTER_HARVESTER_PLUGIN_SERVICE if self._use == TWITTER_CYCLE_HARVESTER else TWITTER_PLUGIN_SERVICE
         twitter_plugins = [p for p in self._plugins if p._for == service]
         remaining_users = st.load_data(TWITTER_CANDIDATES_STORAGE)
         remaining_users = remaining_users if remaining_users else []
@@ -374,6 +378,7 @@ class Scheduler:
                       'store': store, 'plugins': facebook_plugins})
 
     def __prepare_work__(self):
+        """Prepares the crawler tasks"""
         tasks = Queue.PriorityQueue()
         login = st.read_login(TWITTER_CREDENTIALS)
         for s in self._sites:
@@ -403,6 +408,7 @@ class Scheduler:
         return [i[1] for i in ret]
 
     def __get_top_n_trends__(self, n,SYS_INIT=False):
+        """Retrieves the top n most popular trends"""
         if self._use == TWITTER_HYBRID_MODEL and not SYS_INIT:
             if n == -1:
                 return [i[1] for i in self._trends]
@@ -414,7 +420,6 @@ class Scheduler:
             try:
                 if c.TIME_TO_UPDATE_TRENDS < time.time():
                     twitter = filter(lambda x: isinstance(x, handlers.TwitterHandler), self._handlers)[0]
-                    #self._trends = twitter.get_trends()
                     # if a location was specified in the trends tell the handler if not just request
                     self._trends = twitter.get_trends(self._trends) if contains_locations(self._trends) \
                         else twitter.get_trends(dict())
@@ -436,7 +441,7 @@ class Scheduler:
                     return [self.__get_top_n_accounts__(TWITTER_BULK_LIST_SIZE) for _ in
                             xrange(TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE)]
                 predicted = [{'ids':self.__get_top_n_accounts__(TWITTER_BULK_LIST_SIZE)} for _ in
-                             xrange(int(TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * PARTITION_FACTOR))]
+                             xrange(int(TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * c.PARTITION_FACTOR))]
                 normal = self._target_queue[task].pop()
                 self._target_queue[task].appendleft(normal)
                 if len(normal) == 0:
