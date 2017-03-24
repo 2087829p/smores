@@ -76,6 +76,8 @@ DEEP_NEURAL_NETWORK_CLASSIFIER
 K_MEANS_CLASSIFIER
 ```
 Other scheduler parameters not metioned above can be found below:
+
+
 |Argument     |Accepted object |Functoion     |
 |-------------|----------------|--------------|
 |`sites`      |`list of string`|`intructs the crawler which platforms to collect data from`|
@@ -94,6 +96,8 @@ import constants as c
 c.MIN_TWITTER_STATUSES_COUNT = #whatever value you want
 ```
 Other control variables and their function can be seen below:
+
+
 |Variable              |Function|
 |:---------------------|:-------|
 |`COLLECTING_DATA_ONLY`|`if set to true the crawler will not find new users to follow on Twitter`|
