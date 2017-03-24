@@ -1,4 +1,6 @@
 __author__ = 'tony petrov'
+# The following is an implementation of the algorithm proposed by McMinn A. J., Joemon Jose J. M. [DOI>10.1007/978-3-319-24027-5_6]
+
 from storage import Filter
 from nltk.tag import StanfordNERTagger
 from math import *
@@ -7,9 +9,10 @@ from collections import Counter
 from scheduler import Scheduler
 import copy
 import constants as c
-
+# change these before running
 model_path = "E:/stanford-ner/classifiers/english.all.3class.distsim.crf.ser.gz"
 jar_path = "E:/stanford-ner/stanford-ner.jar"
+#===============================
 BURST_LENGTH_SCALE = 1.5
 
 class WordStatsCollector:
@@ -202,7 +205,6 @@ class Clusterer(Filter):
         return self._current_cluster_id
 
     def get_events(self):
-        events = []
         with self._lock:
             events = copy.deepcopy(self._events.keys())
         return events

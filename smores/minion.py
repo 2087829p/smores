@@ -1,7 +1,8 @@
 __author__ = 'tony petrov'
 
 import threading
-from handlers import TwitterStreamer, TwitterHandler
+from handlers import TwitterStreamer
+import copy
 import time
 from constants import *
 import datetime
@@ -79,10 +80,12 @@ class Minion(threading.Thread):
                     self._task['op'])
             if self._task['plugins'] and self._task['op'] != TASK_EXPLORE:
                 for p in self._task['plugins']:
-                    p.data_available(data)
+                    p.data_available(copy.deepcopy(data)) #since we might have alot of plugins give them a copy
+                                                          #prevents the filters from destroying each others data
             time.sleep(POLITENESS_VALUE)
             # with self._lock:
-            self._task['store'](data)
+            if self._task['store']:
+                self._task['store'](data)
 
 
 class Streamion(Minion):
@@ -97,8 +100,9 @@ class Streamion(Minion):
     def data_available(self,data):
         if self._task['plugins']:
             for p in self._task['plugins']:
-                p.data_available(data)
-        self._task['store'](data)
+                p.data_available(copy.deepcopy(data))
+        if self._task['store']:
+            self._task['store'](data)
 
     def run(self):
         import constants as c

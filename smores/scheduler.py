@@ -1,5 +1,3 @@
-import datetime as dt
-import numpy as np
 import storage as st
 from heapq import *
 import minion as m
@@ -10,6 +8,7 @@ from utils import *
 from math import *
 import Queue
 import time
+import os
 from collections import deque
 __author__ = 'tony petrov'
 
@@ -29,14 +28,18 @@ COLLECTION_CONTEXT_SWITCH_TIMEOUT = 3600  # every hour (aka cycle) new collectio
 class RankingFilter(st.Filter):
     def __init__(self, service, store, filters, classifier=PERCEPTRON_CLASSIFIER):
         super(RankingFilter, self).__init__(service, store, filters)
-        self._influential_users = {}
+        self._active_users = {}
         self._total_tags = 0
         self._hot_topics = {}
         self._last_updated = time.time()
+    # try to load a previously trained classifier
         self._classifier = st.load_data(RANKING_FILTER_CLASSIFIER)
         self._training_users = []
         self._training_topics = []
-        self._topic_classifier = KMeanClassifier()
+    # check if we have trained a classifier before and if yes then load it
+        self._topic_classifier = st.load_data(RANKING_FILTER_TOPIC_CLASSIFIER) \
+            if os.path.exists(st.__abs_path__(RANKING_FILTER_TOPIC_CLASSIFIER)) \
+            else KMeanClassifier()
         if not self._classifier:
             if classifier == PERCEPTRON_CLASSIFIER:
                 self._classifier = NeuralNetwork(5, 1)
@@ -49,18 +52,19 @@ class RankingFilter(st.Filter):
 
     def __train_and_rank__(self, now):
         influential_users = []
-        if isinstance(self._classifier, NeuralNetwork):
-            for k in self._influential_users:
-                u = self._influential_users[k]
+        if isinstance(self._classifier, NeuralNetwork):	#if we are using a neural network single/multi layer
+            for k in self._active_users:
+                u = self._active_users[k]
                 # fit tslp in window and then cast the window size in range 0 to 1
                 # then increase the weight of smaller tslp's since shorter time means more active user!
                 u['tslp'] = 1.0 - (np.clip(fit_in_range(0.0,RUNNING_CYCLE,u['tslp']),0,1))
                 influential_users.append((float(self._classifier.predict(
                     [u['tslp'], u['followers'], u['friends'],  u['mentions'], u['post_frq']])[0]), k))
         else:
-            influential_users = [(self._classifier.predict(np.array(self._influential_users[u]['series'])), u) for u in
-                                 self._influential_users.keys()]
-        max_number_of_tweets_per_cycle = 500
+        # not using a neural network use k-means
+            influential_users = [(self._classifier.predict(np.array(self._active_users[u]['series'])), u) for u in
+                                 self._active_users.keys()]
+        max_number_of_tweets_per_cycle = 500 # max number of tweets to be stored for future training
         if self._training_topics:
             topics = self._training_topics
             max_number_training_samples = 50
@@ -78,48 +82,52 @@ class RankingFilter(st.Filter):
             #====================================================
             for i in xrange(min(len(pos_t),len(neg_t))):
                 try:
-                    self._topic_classifier.train(self._training_topics[pos_t[i]]['series'], 1)
-                    self._topic_classifier.train(self._training_topics[neg_t[i]]['series'], 0)
+                    with self._lock:
+                        self._topic_classifier.train(self._training_topics[pos_t[i]]['series'], 1)
+                        self._topic_classifier.train(self._training_topics[neg_t[i]]['series'], 0)
                 except Exception as e:
                     print "Error while training classifier : %s" % e.message
         hot_topics = [(self._topic_classifier.predict(self._hot_topics[k]['series']), k) for k in
                           self._hot_topics.keys()]
         self._training_topics = self._hot_topics
         out = (hot_topics, influential_users)
+    # randomly choose users for training set
         samples = random.sample(out[1], min(len(out[1]), max_number_of_tweets_per_cycle))
         if self._training_users:
             epochs = 80
             for s in self._training_users.keys():
                 u = self._training_users[s]
                 if isinstance(self._classifier, NeuralNetwork):
-                    self._classifier.train(
+                    with self._lock:
+                        self._classifier.train(
                         [u['tslp'], u['followers'], u['friends'], u['mentions'],
                                  u['post_frq']],
-                        [1.0 if s in self._influential_users else 0.0],epochs)
+                        [1.0 if s in self._active_users else 0.0],epochs)
                 else:
-                    self._classifier.train(u['series'], 1.0 if s in self._influential_users else 0.0)
-        self._training_users = {s[1]: self._influential_users[s[1]] for s in samples}
+                    with self._lock:
+                        self._classifier.train(u['series'], 1.0 if s in self._active_users else 0.0)
+        self._training_users = {s[1]: self._active_users[s[1]] for s in samples}
         self._hot_topics = {}
         self._last_updated = now
-        self._influential_users = {}
+        self._active_users = {}
         return out
 
     def process(self, data):
         now = time.time()
-        cycle = int(now - self._last_updated)
-        if now > self._last_updated + c.RANK_RESET_TIME:
+        cycle = int(now - self._last_updated)	# which cycle we are at since the last time we've trained
+        if now > self._last_updated + c.RANK_RESET_TIME: # check if it's time to train if yes then train
             return self.__train_and_rank__(now)
         if isinstance(data,dict):   # can't iterate over a dict so cast it to a list
             data = [data]
         for t in data:
             if 'user' not in t or 'id' not in t.get('user',{}):
                 continue
-            user = self._influential_users.setdefault(t['user']['id'],
-                                               dict(tslp=time.time(), followers=0, friends=0, total_posts=0, mentions=0,
-                                                    post_frq=0, series=[1.0 for _ in range(RUNNING_CYCLE)]))
+            user = self._active_users.setdefault(t['user']['id'],
+                                                 dict(tslp=time.time(), followers=0, friends=0, total_posts=0, mentions=0,
+                                                    post_frq=0, series=[1.0 for _ in xrange(RUNNING_CYCLE)]))
             created = get_tweet_timestamp(t)
-            scaling_factor = 19
-            user["tslp"] = created - user.get('tslp',time.time())
+            scaling_factor = 19     # maximum size of a 64 bit int like the one that Twitter uses
+            user["tslp"] = created - user.get('tslp',now) # calculate the time since last post
             # scale friends and followers to fit range 0 to 1 the higher the number of friends/followers the closer to 1
             user["followers"] = fit_in_range(0, scaling_factor, log10(max(1,t["user"].get("followers_count",1))))
             user["friends"] = fit_in_range(0, scaling_factor,log10(max(1,t["user"].get("friends_count",1))))
@@ -132,22 +140,25 @@ class RankingFilter(st.Filter):
                 for h in entities["hashtags"]:
                     tag = h.get("text","")
                     if not all_ascii(tag):
-                        continue
-                    topic = self._hot_topics.setdefault(tag, dict(series=[1.0 for _ in range(RUNNING_CYCLE)],
-                                                           count=0))  # dict(count=0,likes=0,rts=0))
+                        continue            # tweet is probably not in English so skip it
+                    topic = self._hot_topics.setdefault(tag, dict(series=[1.0 for _ in xrange(RUNNING_CYCLE)],
+                                                           count=0))
                     topic['series'][max(0,min(cycle, int(now - created)))] += 1.0
-                    # user['tags'] = user.setdefault('tags',set()).add(tag)
                     topic["count"] += 1
-                    # topic["likes"] += t["favorite_count"]
-                    # topic["rts"] += t["retweet_count"]
-                    # self._total_tags += 1
             if 'user_mentions' in entities:
                 for m in entities['user_mentions']:
-                    u = self._influential_users.setdefault(m["id"],dict(tslp=time.time(), followers=0, friends=0,
-                                                                        total_posts=0, mentions=0, post_frq=0,
-                                                                        series=[1.0 for _ in range(RUNNING_CYCLE)]))
+                    u = self._active_users.setdefault(m["id"], dict(tslp=time.time(), followers=0, friends=0,
+                                                                    total_posts=0, mentions=0, post_frq=0,
+                                                                    series=[1.0 for _ in xrange(RUNNING_CYCLE)]))
                     u['mentions'] += 1
         return None
+
+    def interrupt(self):
+        with self._lock:
+            st.save_data(self._classifier, RANKING_FILTER_CLASSIFIER)
+            st.save_data(self._topic_classifier, RANKING_FILTER_TOPIC_CLASSIFIER)
+        super(RankingFilter, self).interrupt()
+
 
 
 class Scheduler:
@@ -178,17 +189,28 @@ class Scheduler:
                     self._handlers.append(t)
                     ix += 1
                     break  # we ran out of proxies so just exit
+        c.TWITTER_ACCOUNTS_COUNT = ix
         self._trends = kwargs.get('trends', {})
+        self._target_queue = dict()
+        self._target_queue['tumblr_tags'] = kwargs.get('tumblr_tags', [])
+        self._target_queue['fb_users'] = kwargs.get('fb_users', [])
+        self._target_queue['blogs'] = kwargs.get('blogs', [])
         if not self._trends or contains_locations(self._trends):
             self._trends = self.__get_top_n_trends__(-1,True)
         if c.TESTING:
             self._predefined_store = False
-            self._store = lambda x: x
+            self._store = None
             self._thread_num += cores - (self._thread_num + len(self._plugins))
         else:
             if 'storage' in kwargs.keys():
                 self._storages = kwargs['storage']
                 self._predefined_store = True
+                if not kwargs['storage']:
+                    import warnings
+                    warnings.warn("No storage system is specified this may lead to loss of data",Warning)
+                    # double the number of crawler threads we have no storage
+                    self._thread_num += self._thread_num if kwargs.get('multicore', False) else 0
+                    return
             else:
                 if 'ip' not in kwargs.keys() and 'port' not in kwargs.keys():
                     raise ValueError('IP and port of the MongoDB server must be specified')
@@ -196,11 +218,8 @@ class Scheduler:
                 self._store = self._storage.write
                 self._predefined_store = False
             self._thread_num += 1 if kwargs.get('multicore', False) else 0
-        self._target_queue = dict()
-        self._target_queue['tumblr_tags'] = kwargs.get('tumblr_tags', [])
-        self._target_queue['fb_users'] = kwargs.get('fb_users', [])
-        self._target_queue['blogs'] = kwargs.get('blogs', [])
-        # self.start()
+
+        
 
     def add_filters(self, filters):
         """add new plugins to the beginning of the toolchain"""
@@ -211,6 +230,7 @@ class Scheduler:
         self._timers = []
         if not c.TESTING:
             if not self._predefined_store:
+        # add times to change the name of the db after 1 day and the name of the collection after each cycle
                 self._timers.append(CrawlTimer(COLLECTION_CONTEXT_SWITCH_TIMEOUT,
                                                self._storage.switch_collection_context))
                 self._timers.append(CrawlTimer(DB_CONTEXT_SWITCH_TIMEOUT, self._storage.switch_db_context))
@@ -221,7 +241,7 @@ class Scheduler:
             non_twitter = filter(lambda x: x if not isinstance(x, handlers.TwitterHandler) else None, self._handlers)
             if non_twitter:
                 timer = self._timers[-1]
-                for i in range(len(non_twitter)):
+                for i in xrange(len(non_twitter)):	# add a function to reset the quotas of tumblr and facebook after 1 hour
                     timer.add_function(non_twitter[i].reset_daily_requests)
         if self._use == TWITTER_STREAMING_BUCKET_MODEL:
             self.__setup_streamer__(self._trends)
@@ -234,13 +254,12 @@ class Scheduler:
             self.__setup_minions__()
         else:
             self.__setup_minions__()
-        self._cycles = [0 for i in range(TOTAL_TASKS)]
+        self._cycles = [0 for _ in xrange(TOTAL_TASKS)] # used for debug purposes
         print "Crawling with %d minions" % len(self._minions)
         for mn in self._minions:
             mn.start()
         for p in self._plugins:
             p.start()
-            # mn.join()
         if not TESTING and self._timers:
             for t in self._timers:
                 t.start()
@@ -266,7 +285,7 @@ class Scheduler:
             # this is done to avoid stalling due to too low thread count and getting stuck in slow ops
             self._thread_num += 1
         self._thread_num = min(self._thread_num, unique_ops)
-        for i in range(self._thread_num):
+        for i in xrange(self._thread_num):
             task = self._tasks.get_nowait()[1]
             self._tasks.task_done()
             self._minions.append(m.Minion(task, lock=self._lock, scheduler=self))
@@ -274,7 +293,7 @@ class Scheduler:
 
     def __setup_streamer__(self, trend_data):
         login = [l for l in st.read_login(TWITTER_CREDENTIALS) if l['site'] == 'twitter']
-        for i in range(len(login)):
+        for i in xrange(len(login)):
             login[i]['id'] = i
         serv = TWITTER_STREAMING_PLUGIN_SERVICE if self._use == TWITTER_STREAMING_BUCKET_MODEL else TWITTER_PLUGIN_SERVICE
         plugins = [p for p in self._plugins if p._for == serv]
@@ -286,42 +305,50 @@ class Scheduler:
 
     def __prepare_twitter__(self, tasks):
         """Generates a queue of tasks for the Twitter cycle harvester model"""
+        # get the plugins for the twitter harvester service or twitter service
         service = TWITTER_HARVESTER_PLUGIN_SERVICE if self._use == TWITTER_CYCLE_HARVESTER else TWITTER_PLUGIN_SERVICE
         twitter_plugins = [p for p in self._plugins if p._for == service]
+        # ===================load data=============
         remaining_users = st.load_data(TWITTER_CANDIDATES_STORAGE)
         remaining_users = remaining_users if remaining_users else []
         bulk_lists = st.load_data(TWITTER_BULK_LIST_STORAGE)
         lists = st.load_data(TWITTER_LIST_STORAGE)
         users = st.load_data(TWITTER_USER_STORAGE)
         timeline = st.load_data(TWITTER_WALL_STORAGE)
+        #=========================================
         if not timeline:
             timeline = {'id': 0}
+        # split ids into lists of the correct size for the given task
         blg = split_into(bulk_lists, TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE)
         bulk_lists = [l for l in blg]
         lg = split_into(lists, TWITTER_MAX_NUMBER_OF_LISTS)
         lists = [l for l in lg]
         ug = split_into(users, TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS)
         users = [l for l in ug]
+        #============================================================
         store = self._store if not self._predefined_store else self._storages
 
+        # build task data queues
         self._target_queue[TASK_BULK_RETRIEVE] = deque(bulk_lists)
         self._target_queue[TASK_FETCH_USER] = deque(users)
         self._target_queue[TASK_FETCH_LISTS] = deque(lists)
         self._target_queue[TASK_UPDATE_WALL] = deque([timeline])
         self._target_queue[TASK_EXPLORE] = deque([remaining_users])
+        # ============================
         twitters = filter(lambda x: isinstance(x, handlers.TwitterHandler), self._handlers)
-        for i in range(len(twitters)):
+        for i in range(len(twitters)):          # for each twitter account create a new task
             t = twitters[i]
-            # tasks.put((0, {'site': 'twitter', 'op': TASK_EXPLORE,
-            #                'data': {'remaining': remaining_users,
-            #                         'bulk_lists': flatten(bulk_lists),
-            #                         'total_followed': flatten(users),
-            #                         'user_lists': flatten(lists),
-            #                         },
-            #                'fetch': t.explore,
-            #                'store': st.save_candidates,
-            #                'plugins': twitter_plugins,
-            #                'acc_id': t.id}))
+            if not c.COLLECTING_DATA_ONLY:
+                tasks.put((0, {'site': 'twitter', 'op': TASK_EXPLORE,
+                            'data': {'remaining': remaining_users,
+                                     'bulk_lists': flatten(bulk_lists),
+                                     'total_followed': flatten(users),
+                                     'user_lists': flatten(lists),
+                                     },
+                            'fetch': t.explore,
+                            'store': st.save_candidates,
+                            'plugins': twitter_plugins,
+                            'acc_id': t.id}))
             if not c.EXPLORING:
                 tasks.put((0, {'site': 'twitter', 'op': TASK_UPDATE_WALL,
                                'data': timeline, 'fetch': t.fetch_home_timeline,
@@ -396,10 +423,8 @@ class Scheduler:
             return
         users = data[1]
         topics = data[0]
-        self._target_queue['users'] = users#[(users[k], k) for k in users.keys()]
-        self._trends = topics #[(topics[k], k) for k in topics.keys()] if topics else []
-        # heapify(self._target_queue)
-        # heapify(self._trends)
+        self._target_queue['users'] = users
+        self._trends = topics 
 
     def __get_top_n_accounts__(self, n):
         ret = nlargest(n, self._target_queue["users"])
@@ -410,6 +435,7 @@ class Scheduler:
     def __get_top_n_trends__(self, n,SYS_INIT=False):
         """Retrieves the top n most popular trends"""
         if self._use == TWITTER_HYBRID_MODEL and not SYS_INIT:
+            # we're using the hybrid model and we're no initializing the system so get topics from the predicted topics
             if n == -1:
                 return [i[1] for i in self._trends]
             ret = nlargest(n, self._trends)
@@ -418,7 +444,7 @@ class Scheduler:
             return [i[1] for i in ret]
         else:
             try:
-                if c.TIME_TO_UPDATE_TRENDS < time.time():
+                if c.TIME_TO_UPDATE_TRENDS < time.time(): # check if we should refresh our topic list
                     twitter = filter(lambda x: isinstance(x, handlers.TwitterHandler), self._handlers)[0]
                     # if a location was specified in the trends tell the handler if not just request
                     self._trends = twitter.get_trends(self._trends) if contains_locations(self._trends) \
@@ -426,8 +452,10 @@ class Scheduler:
                     c.TIME_TO_UPDATE_TRENDS = time.time() + RUNNING_CYCLE
                 if n == -1:
                     return self._trends
+        # get the number of topics requested and remove them from the queue/list
                 out = self._trends[:n]
                 self._trends = self._trends[n:]
+        #================================================================
                 return out
             except:
                 pass
@@ -442,15 +470,24 @@ class Scheduler:
                             xrange(TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE)]
                 predicted = [{'ids':self.__get_top_n_accounts__(TWITTER_BULK_LIST_SIZE)} for _ in
                              xrange(int(TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * c.PARTITION_FACTOR))]
-                normal = self._target_queue[task].pop()
-                self._target_queue[task].appendleft(normal)
+                normal = self._target_queue[task].pop()     # get a sample of users from the database
+                self._target_queue[task].appendleft(normal) # put the sample at the end for future use
+                if len(normal) == 0:
+                    return predicted
+    # return a mix of predicted users and users from the db to avoid pollution of data
+                return predicted + random.sample(normal,
+                                                 min(len(normal)/2,     #needed to ensure that the sample is never larger than the population
+                                                     TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE - len(predicted)))
+            elif task == TASK_FETCH_USER:
+        # get predicted users up to the specified partition
+                predicted = self.__get_top_n_accounts__(int(TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS * c.PARTITION_FACTOR))
+                normal = self._target_queue[task].pop()     # get a sample of users from the database
+                self._target_queue[task].appendleft(normal) 
                 if len(normal) == 0:
                     return predicted
                 return predicted + random.sample(normal,
                                                  min(len(normal)/2,     #needed to ensure that the sample is never larger than the population
                                                      TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE - len(predicted)))
-            elif task == TASK_FETCH_USER:
-                return self.__get_top_n_accounts__(TWITTER_MAX_NUMBER_OF_NON_FOLLOWED_USERS)
         else:
             if self._target_queue[task]:
                 # if we have data give it
@@ -469,15 +506,16 @@ class Scheduler:
                         return []
                     lst = split_into(lists, TWITTER_MAX_NUMBER_OF_LISTS)
                     self._target_queue[TASK_FETCH_LISTS] = deque([l for l in lst])
+        #=====================================================================
                 return self._target_queue[task].pop()
         return []
 
     def __put_data__(self, task, data):
-        self._target_queue[task].appendleft(data)
+        with self._lock:
+            self._target_queue[task].appendleft(data)
 
     def request_work(self, task):
-        """Request a new task once the old one is finished"""
-        print 'before ' + str([v[1]['op'] for v in self._tasks.queue])
+        """Request a new task once the old one is finished"""       
         if task['site'] != 'sleep':
             if not 'timeout' in task:
                 task['timeout'] = time.time() + (RUNNING_CYCLE if task['site'] == 'twitter'
@@ -486,8 +524,7 @@ class Scheduler:
             with self._lock:
                 self._cycles[task['op']] += 1
             if task['op'] != TASK_TWITTER_SEARCH:
-                self.__put_data__(task['op'], task['data'])
-            print 'after' + str([v[1]['op'] for v in self._tasks.queue])
+                self.__put_data__(task['op'], task['data'])            
         if not self._tasks.queue:
             # No data yet so check again in 5 seconds
             return {'site': 'sleep', 'time': 5}

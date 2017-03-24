@@ -75,21 +75,12 @@ class TwitterHandler:
                                                         acc_details['oauth_token'], acc_details['oauth_token_secret'])
 
                 self.acc_details = acc_details
-            # self._auth=self._handlers.get_authentication_tokens()
-            # self._lists=self._handlers.show_owned_lists()#get lists that the user has
             except Exception as e:
                 print "Unable to login to twitter cause " + e.message
                 import sys
                 sys.exit()
         self._scheduler = kwargs.get('scheduler', None)
-        self._list_attempts = 15
-        self._wait_for = [0 for i in range(4)]
-
-    def can_fetch(self):
-        if (len(self._wait_for) == 0):
-            return True
-        # checks if any operation has been time limited and if so checks if the time limit has passed
-        return any(d + datetime.timedelta(minutes=15) < datetime.datetime.now() for d in self._wait_for)
+        self._list_attempts = 15        
 
     # Tries to fit new twitter accounts into either the twitter lists or the bulk lists
     def fit_to_lists(self, candidates, lists, max_list_num, max_list_size, is_twitter_list):
@@ -109,6 +100,7 @@ class TwitterHandler:
                     lists[-1]['count'] = self._twitter.get_specific_list(list_id=lists[-1]['id'])['member_count']
                     return candidates
                 try:
+                    # determine how many users to add to the list
                     take = min(constants.TWITTER_ADD_TO_LIST_LIMIT, take)
                     # use the api to add the new users to the list
                     self._list_attempts -= 1
@@ -207,6 +199,7 @@ class TwitterHandler:
                 rqs_remaining[0] -= 1
             # check if we have any get list of user requests remaining
             elif (rqs_remaining[1] > 0):
+                # remove all users with less than 150 tweets or who have private accounts and add the remaining users' ids to the list
                 users += [x["id"] for x in user_filter(self._twitter.get_friends_list(user_id=id)["users"])]
                 users += [x["id"] for x in user_filter(self._twitter.get_followers_list(user_id=id)["users"])]
                 rqs_remaining[1] -= 1
@@ -274,7 +267,8 @@ class TwitterHandler:
             candidates_total = len(candidates)
             # try to fit some users into the bulk lists
             candidates = self.fit_to_lists(candidates, bulk_lists,
-                                           constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * constants.TWITTER_CYCLES_PER_HOUR,
+                                           constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * c.TWITTER_CYCLES_PER_HOUR
+                                           * c.TWITTER_ACCOUNTS_COUNT,
                                            constants.TWITTER_BULK_LIST_SIZE, False)
             print str(candidates_total - len(candidates)) + " users added to bulk lists"
             candidates_total = len(candidates)
@@ -283,16 +277,17 @@ class TwitterHandler:
             print str(len(candidates)) + " users left unallocated"
         except Exception as e:
             print "Error while exploring " + e.message
+            # an error occurred see if we have any candidates
             if candidates:
-                candidates = self.fit_to_lists(candidates, user_lists,
-                                               constants.TWITTER_MAX_NUMBER_OF_LISTS * constants.TWITTER_CYCLES_PER_HOUR,
-                                               constants.TWITTER_MAX_LIST_SIZE, True)
+                # if yes then store their credentials offline since the error might be from Twitter
                 candidates = self.fit_to_lists(candidates, bulk_lists,
-                                               constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * constants.TWITTER_CYCLES_PER_HOUR,
+                                               constants.TWITTER_MAX_NUM_OF_BULK_LISTS_PER_REQUEST_CYCLE * c.TWITTER_CYCLES_PER_HOUR
+                                               * c.TWITTER_ACCOUNTS_COUNT,
                                                constants.TWITTER_BULK_LIST_SIZE, False)
                 self.__follow_users__(candidates, users, constants.MAX_FOLLOWABLE_USERS)
         if constants.TESTING:
-            return []
+            return [] # we are testing so just exit
+        # save the data
         st.save_data(user_lists, constants.TWITTER_LIST_STORAGE)
         st.save_data(bulk_lists, constants.TWITTER_BULK_LIST_STORAGE)
         st.save_data(users, constants.TWITTER_USER_STORAGE)
@@ -332,7 +327,8 @@ class TwitterHandler:
             max_attempts -= 1
         # tell worker that next time we want the new tweets only
         task_data['since'] = True
-        st.save_data(task_data, constants.TWITTER_WALL_STORAGE)
+        if not c.TESTING:
+            st.save_data(task_data, constants.TWITTER_WALL_STORAGE)
         return data
 
     # fetches the specified user's timeline
@@ -373,15 +369,16 @@ class TwitterHandler:
         return ret_data
 
     def search(self, q_params):
-        max_attempts = 180
-        query_max_length = 500
+        max_attempts = 180          # can't make more than 180 requests ref:https://dev.twitter.com/rest/reference/get/search/tweets
+        query_max_length = 500      # twitter won't accept queries with more than 500 chars
         data = []
         keywords = q_params['keywords']
-        keywords.reverse()
+        keywords.reverse()          # reverse since we will be using the list as a stack
         while max_attempts > 0 and len(keywords) > 0:
             query = keywords.pop()
-            if len(keywords) > 1:
+            if len(keywords) > 1:       #if we have more than 1 keyword then we have to make a query
                 current_length = len(query)
+                # keep adding words to our query string until the length of the query is equal to query_max_length
                 while current_length < query_max_length and len(keywords) > 0:
                     op = ' OR '
                     if current_length + len(op) + len(keywords[-1]) < query_max_length:
@@ -457,20 +454,23 @@ class TumblrHandler:
             self._rqs_for_the_day -= 1
 
     def reset_requests(self):
+        """Resets the hourly request quota to be called only by timer"""
         if self._rqs_for_the_day > 0:
-            self._rqs_per_cycle_remaining = constants.TUMBLR_MAX_REQUESTS_PER_HOUR
+            with self._lock:
+                self._rqs_per_cycle_remaining = constants.TUMBLR_MAX_REQUESTS_PER_HOUR
 
     def reset_daily_requests(self):
+        """Resets the daily request quoata to be called only by timer"""
         with self._lock:
             self._rqs_for_the_day = constants.TUMBLR_MAX_REQUESTS_PER_DAY
 
     def __get_rqs_remaining__(self):
-        ret = 0
         with self._lock:
             ret = self._rqs_per_cycle_remaining
         return ret
 
     def get_dashboard(self, last_id):
+        """ Get the posts on the authenticated user's wall"""
         if self.__get_rqs_remaining__() <= 0:
             return []
         data = self._client.dashboard()
@@ -484,12 +484,14 @@ class TumblrHandler:
         self._client.follow(user_id)
 
     def get_post_with_tag(self, tag_info):
+        """Gets posts containing a specific tag or group of tags"""
         if self.__get_rqs_remaining__() <= 0:
             return []
         self.__dec_remaining_rqs__()
         return self._client.tagged(tag_info['tags'], filter=tag_info['filter'])
 
     def get_blog_posts(self, blog):
+        """Gets the posts from a specific blog"""
         if self.__get_rqs_remaining__() <= 0:
             return []
         self.__dec_remaining_rqs__()
@@ -520,14 +522,18 @@ class FacebookHandler:
         return ret
 
     def reset_requests(self):
+        """Resets the hourly facebook request quota to be called only by timer"""
         if self._rqs_for_the_day > 0:
-            self._rqs_per_cycle_remaining = constants.FACEBOOK_MAX_REQUESTS_PER_HOUR
+            with self._lock:
+                self._rqs_per_cycle_remaining = constants.FACEBOOK_MAX_REQUESTS_PER_HOUR
 
     def reset_daily_requests(self):
+        """Resets the daily request quoata to be called only by timer"""
         with self._lock:
             self._rqs_for_the_day = constants.FACEBOOK_MAX_REQUESTS_PER_HOUR * 24
 
     def get_posts_for_users(self, user_ids):
+        """Fetches the posts made by a specific group of users"""
         if len(user_ids) > self.__get_rqs_remaining__():
             raise Rate_Limit_Error('Request will exceed Facebook rate limit')
         # must decrease by number of all ids we requested cause facebook counts every id as a request
@@ -539,7 +545,9 @@ class FacebookHandler:
         return result
 
     def get_my_wall(self, **kwargs):
+        """"Fetches the posts on the authenticated user's wall"""
         if self.__get_rqs_remaining__() <= 0:
             raise Rate_Limit_Error('Facebook rate limit reached')
         self.__dec_remaining_rqs__()
         return self._graph.get_object('me/posts')['data']
+        

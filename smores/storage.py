@@ -4,7 +4,6 @@ import os
 import pickle
 import time
 import threading
-import pymongo
 import constants
 from concurrent import futures
 import Queue
@@ -120,6 +119,7 @@ class StorageSystem:
 
     def __perform_write__(self, data, ip, port, **kwargs):
         'Write the new data to the specified server'
+        import pymongo
         try:
             mongo = pymongo.MongoClient(ip, port)
             db = mongo[kwargs['current_db']]
@@ -203,4 +203,4 @@ class Filter(threading.Thread):
 
     def process(self, data):
         'Processes the input data must be overridden and implemented in every class that subclasses this one'
-        pass
+        raise NotImplementedError()
