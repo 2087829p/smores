@@ -77,7 +77,7 @@ K_MEANS_CLASSIFIER
 ```
 Other scheduler parameters not metioned above can be found below:
 |Argument     |Accepted object |Functoion     |
-|:------------|:---------------|:-------------|
+|-------------|:--------------:|-------------:|
 |`sites`      |`list of string`|`intructs the crawler which platforms to collect data from`|
 |`multicore`  |`boolean`       |`if set to True the crawler will use more than 1 thread to crawl`|
 |`trends`     |`list of string`|`specifies a list of topics to be followed on twitter`|
